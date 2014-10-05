@@ -2,6 +2,7 @@ package mengli.android.pcmaudiorecorder;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import android.app.Activity;
 import android.media.AudioFormat;
@@ -16,25 +17,25 @@ import android.widget.Button;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
-	
+
 	private static final int RECORDING = 0;
 	private static final int STOPPED = 1;
-	
+
 	private static final int RECORDER_SAMPLERATE = 8000;
 	private static final int RECORDER_CHANNELS = AudioFormat.CHANNEL_IN_MONO;
 	private static final int RECORDER_AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 	private AudioRecord recorder = null;
 	private Thread recordingThread = null;
-	
+
 	private Button mStartButton;
 	private Button mStopButton;
-	
+
 	private TextView mStatusLabel;
 	private TextView mOutputLabel;
-	
+
 	private String mFilePath;
-	
-	private int status;
+
+	private AtomicInteger status;
 	private int mMinBufferSize;
 
 	private void startRecording() {
@@ -57,12 +58,14 @@ public class MainActivity extends Activity {
 	    FileOutputStream os = null;
 	    try {
 		    os = new FileOutputStream(mFilePath);
-		    while (status == RECORDING) {
+		    while (status.get() == RECORDING) {
 		        // gets the voice output from microphone to byte format
-		        int count = recorder.read(buffer, 0, mMinBufferSize);
-		        if (count > 0) {
-		            os.write(buffer, 0, count);
-		        }
+		    	synchronized (recorder) {
+		    		int count = recorder.read(buffer, 0, mMinBufferSize);
+			        if (count > 0) {
+			            os.write(buffer, 0, count);
+			        }
+				}
 		    }
 	    } catch (IOException e) {
 	        e.printStackTrace();
@@ -80,9 +83,11 @@ public class MainActivity extends Activity {
 	private void stopRecording() {
 	    // stops the recording activity
 	    if (null != recorder) {
-	        recorder.stop();
-	        recorder.release();
-	        recorder = null;
+	    	synchronized (recorder) {
+	    		recorder.stop();
+	    		recorder.release();
+	    		recorder = null;
+	    	}
 	        recordingThread = null;
 	    }
 	}
@@ -93,9 +98,9 @@ public class MainActivity extends Activity {
 		        case R.id.btnStart: {
 		            mStartButton.setEnabled(false);
 		            mStopButton.setEnabled(true);
-		            if (status == STOPPED) {
+		            if (status.get() == STOPPED) {
 		                startRecording();
-		                status = RECORDING;
+		                status.set(RECORDING);
 		                mStatusLabel.setText(R.string.recording);
 		                mOutputLabel.setVisibility(View.INVISIBLE);
 		            }
@@ -104,9 +109,9 @@ public class MainActivity extends Activity {
 		        case R.id.btnStop: {
 		        	mStartButton.setEnabled(true);
 		            mStopButton.setEnabled(false);
-		            if (status == RECORDING) {
+		            if (status.get() == RECORDING) {
+		            	status.set(STOPPED);
 		                stopRecording();
-		                status = STOPPED;
 		                mStatusLabel.setText(R.string.stopped);
 		                mOutputLabel.setVisibility(View.VISIBLE);
 		                mOutputLabel.setText(mFilePath.toString());
@@ -121,7 +126,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        
+
         mStartButton = (Button) findViewById(R.id.btnStart);
 	    mStopButton = (Button) findViewById(R.id.btnStop);
 	    mStatusLabel = (TextView) findViewById(R.id.status_lable);
@@ -130,10 +135,11 @@ public class MainActivity extends Activity {
         mStopButton.setEnabled(false);
         mStartButton.setOnClickListener(mButtonClickListener);
         mStopButton.setOnClickListener(mButtonClickListener);
-	    status = STOPPED;
-	    
+        status = new AtomicInteger();
+        status.set(STOPPED);
+
 	    mFilePath = android.os.Environment.getExternalStorageDirectory() + "/pcmrecorder/output.pcm";
-	    
+
 	    mMinBufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
 				RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
     }
