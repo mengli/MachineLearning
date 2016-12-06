@@ -57,14 +57,11 @@ def main(_):
 
   # Create the model
   x = tf.placeholder(tf.float32, [None, 784])
-  W = tf.Variable(tf.zeros([784, 10]))
-  b = tf.Variable(tf.zeros([10]))
-  y = tf.matmul(x, W) + b
 
   # Define loss and optimizer
   y_ = tf.placeholder(tf.float32, [None, 10])
 
-  x_image = tf.reshape(x, [-1,28,28,1])
+  x_image = tf.reshape(x, [-1, 28, 28, 1])
   
   W_conv1 = weight_variable([5, 5, 1, 32])
   b_conv1 = bias_variable([32])
@@ -81,7 +78,7 @@ def main(_):
   W_fc1 = weight_variable([7 * 7 * 64, 1024])
   b_fc1 = bias_variable([1024])
 
-  h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
+  h_pool2_flat = tf.reshape(h_pool2, [-1, 7 * 7 * 64])
   h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
   keep_prob = tf.placeholder(tf.float32)
