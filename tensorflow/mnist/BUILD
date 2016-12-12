@@ -38,6 +38,18 @@ py_library(
     ],
 )
 
+py_library(
+    name = "mnist_simple”,
+    srcs = [
+        "mnist_simple.py",
+    ],
+    srcs_version = "PY2AND3",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tensorflow:tensorflow_py",
+    ],
+)
+
 py_binary(
     name = "fully_connected_feed",
     srcs = [
@@ -47,6 +59,19 @@ py_binary(
     deps = [
         ":input_data",
         ":mnist",
+        "//tensorflow:tensorflow_py",
+    ],
+)
+
+py_binary(
+    name = "fully_connected_feed_simple”,
+    srcs = [
+        "fully_connected_feed_simple.py",
+    ],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":input_data",
+        ":mnist_simple”,
         "//tensorflow:tensorflow_py",
     ],
 )
