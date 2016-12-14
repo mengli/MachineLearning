@@ -7,7 +7,7 @@ class CifarTest(unittest.TestCase):
         self._cifar = cifar.Cifar()
 
     def testReadDataSets(self):
-        self._cifar.ReadDataSets("cifar-10-batches-py")
+        self._cifar.ReadDataSets()
         self.assertEqual(len(self._cifar.train.images), 50000)
 
 
