@@ -15,6 +15,10 @@ class DataSet(object):
     def labels(self):
         return self._labels
 
+    @labels.setter
+    def labels(self, value):
+        self._labels = value
+
     def next_batch(self, batch_size):
         start = self._index_in_epoch
         self._index_in_epoch += batch_size

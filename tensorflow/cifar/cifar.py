@@ -11,12 +11,14 @@ import os.path
 import dataset
 import urllib2
 import tarfile
+import numpy
 
 FLAGS = None
 
 CIFAR10_DOWNLOAD_URL = 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
 CIFAR10_FILE_NAME = 'cifar-10-python.tar.gz'
-CIFAR10_BATCH_PREFIX = 'cifar-10-batches-py/data_batch_'
+CIFAR10_TRAIN_PREFIX = 'cifar-10-batches-py/data_batch_'
+CIFAR10_TEST = 'cifar-10-batches-py/test_batch'
 CIFAR10_DATA = 'data'
 CIFAR10_LABEL = 'labels'
 
@@ -26,7 +28,7 @@ class Cifar(object):
         self.train = dataset.DataSet()
         self.test = dataset.DataSet()
 
-    def ReadDataSets(self, data_dir="."):
+    def ReadDataSets(self, data_dir=".", one_hot=False):
         file_path = os.path.join(data_dir, CIFAR10_FILE_NAME)
         if not os.path.isfile(file_path):
             _DownloadCifar10(data_dir)
@@ -36,9 +38,24 @@ class Cifar(object):
         # Read training samples from data_batch_1, data_batch_2,..., data_batch_6
         for num in range(1, 6):
             batch = Unpickle(os.path.join(data_dir,
-                                          CIFAR10_BATCH_PREFIX + str(num)))
+                                          CIFAR10_TRAIN_PREFIX + str(num)))
             self.train.images.extend(batch[CIFAR10_DATA])
             self.train.labels.extend(batch[CIFAR10_LABEL])
+
+        test_data = Unpickle(os.path.join(data_dir, CIFAR10_TEST))
+        self.test.images.extend(test_data[CIFAR10_DATA])
+        self.test.labels.extend(test_data[CIFAR10_LABEL])
+
+        if one_hot:
+            self.train.labels = _ToOneHot(self.train.labels, 10)
+            self.test.labels = _ToOneHot(self.test.labels, 10)
+
+
+def _ToOneHot(vector, max):
+    one_hot = numpy.zeros((len(vector), max))
+    for i in xrange(0, len(vector)):
+        one_hot[i][vector[i]] = 1
+    return one_hot
 
 
 def _DownloadCifar10(data_dir):
