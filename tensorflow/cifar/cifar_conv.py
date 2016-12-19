@@ -31,6 +31,8 @@ def main(_):
     cifar10 = cifar.Cifar()
     cifar10.ReadDataSets(one_hot=True)
 
+    keep_prob = tf.placeholder(tf.float32)
+
     # Create the model
     x = tf.placeholder(tf.float32, [None, 3072])
 
@@ -62,20 +64,29 @@ def main(_):
     b_fc1 = bias_variable([1024])
 
     h_pool3_flat = tf.reshape(h_pool3, [-1, 4 * 4 * 128])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
 
-    W_fc2 = weight_variable([1024, 512])
-    b_fc2 = bias_variable([512])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
+    #h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+    W_fc2 = weight_variable([1024, 1024])
+    b_fc2 = bias_variable([1024])
 
     h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2)
+    #h_fc2_drop = tf.nn.dropout(h_fc2, keep_prob)
 
-    W_fc3 = weight_variable([512, 10])
-    b_fc3 = bias_variable([10])
+    W_fc3 = weight_variable([1024, 512])
+    b_fc3 = bias_variable([512])
 
-    y_conv = tf.matmul(h_fc2, W_fc3) + b_fc3
+    h_fc3 = tf.nn.relu(tf.matmul(h_fc2, W_fc3) + b_fc3)
+    #h_fc3_drop = tf.nn.dropout(h_fc3, keep_prob)
+
+    W_fc4 = weight_variable([512, 10])
+    b_fc4 = bias_variable([10])
+
+    y_conv = tf.matmul(h_fc3, W_fc4) + b_fc4
 
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
-    train_step = tf.train.AdamOptimizer(1e-2).minimize(cross_entropy)
+    train_step = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -83,7 +94,7 @@ def main(_):
     sess.run(tf.global_variables_initializer())
 
     for i in range(20000):
-        batch = cifar10.train.next_batch(50)
+        batch = cifar10.train.next_batch(200)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
                 x: cifar10.test.images, y_: cifar10.test.labels})
