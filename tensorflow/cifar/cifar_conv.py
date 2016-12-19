@@ -4,13 +4,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import sys
-
 import cifar
 import tensorflow as tf
-
-FLAGS = None
 
 
 def weight_variable(shape):
@@ -24,7 +19,7 @@ def bias_variable(shape):
 
 
 def conv2d(x, W):
-    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 3], padding='SAME')
+    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
 
 
 def max_pool_2x2(x):
@@ -33,8 +28,8 @@ def max_pool_2x2(x):
 
 
 def main(_):
-    input_data = cifar.Cifar()
-    cifar10_data = input_data.ReadDataSets(one_hot=True)
+    cifar10 = cifar.Cifar()
+    cifar10.ReadDataSets(one_hot=True)
 
     # Create the model
     x = tf.placeholder(tf.float32, [None, 3072])
@@ -57,22 +52,30 @@ def main(_):
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
     h_pool2 = max_pool_2x2(h_conv2)
 
-    W_fc1 = weight_variable([8 * 8 * 64, 1024])
+    W_conv3 = weight_variable([3, 3, 64, 128])
+    b_conv3 = bias_variable([128])
+
+    h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
+    h_pool3 = max_pool_2x2(h_conv3)
+
+    W_fc1 = weight_variable([4 * 4 * 128, 1024])
     b_fc1 = bias_variable([1024])
 
-    h_pool2_flat = tf.reshape(h_pool2, [-1, 8 * 8 * 64])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+    h_pool3_flat = tf.reshape(h_pool3, [-1, 4 * 4 * 128])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
 
-    keep_prob = tf.placeholder(tf.float32)
-    h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+    W_fc2 = weight_variable([1024, 512])
+    b_fc2 = bias_variable([512])
 
-    W_fc2 = weight_variable([1024, 10])
-    b_fc2 = bias_variable([10])
+    h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2)
 
-    y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
+    W_fc3 = weight_variable([512, 10])
+    b_fc3 = bias_variable([10])
+
+    y_conv = tf.matmul(h_fc2, W_fc3) + b_fc3
 
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    train_step = tf.train.AdamOptimizer(1e-2).minimize(cross_entropy)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -80,20 +83,16 @@ def main(_):
     sess.run(tf.global_variables_initializer())
 
     for i in range(20000):
-        batch = mnist.train.next_batch(50)
+        batch = cifar10.train.next_batch(50)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
-                x: mnist.validation.images, y_: mnist.validation.labels, keep_prob: 1.0})
+                x: cifar10.test.images, y_: cifar10.test.labels})
             print("step %d, training accuracy %g" % (i, train_accuracy))
-        train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+        train_step.run(feed_dict={x: batch[0], y_: batch[1]})
 
     print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+        x: cifar10.test.images, y_: cifar10.test.labels}))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',
-                        help='Directory for storing input data')
-    FLAGS, unparsed = parser.parse_known_args()
-    tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+    tf.app.run(main=main)

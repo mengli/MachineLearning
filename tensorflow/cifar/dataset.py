@@ -3,9 +3,9 @@ import numpy
 
 class DataSet(object):
     def __init__(self):
-        self._images = []
-        self._labels = []
-        self._index_in_epoch = 0;
+        self._images = numpy.array([])
+        self._labels = numpy.array([])
+        self._index_in_epoch = 0
 
     @property
     def images(self):
@@ -19,6 +19,18 @@ class DataSet(object):
     def labels(self, value):
         self._labels = value
 
+    def appendImage(self, images):
+        if len(self._images) > 0:
+            numpy.vstack((self._images, images))
+        else:
+            self._images = numpy.array(images)
+
+    def appendLabel(self, labels):
+        if len(self._labels) > 0:
+            numpy.vstack((self._labels, labels))
+        else:
+            self._labels = numpy.array(labels)
+
     def next_batch(self, batch_size):
         start = self._index_in_epoch
         self._index_in_epoch += batch_size
@@ -26,7 +38,7 @@ class DataSet(object):
             perm = numpy.arange(len(self._images))
             numpy.random.shuffle(perm)
             self._images = self._images[perm]
-            self._labels = self._images[perm]
+            self._labels = self._labels[perm]
             self._index_in_epoch = batch_size
             start = 0
         end = self._index_in_epoch

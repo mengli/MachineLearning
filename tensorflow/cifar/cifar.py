@@ -39,12 +39,12 @@ class Cifar(object):
         for num in range(1, 6):
             batch = Unpickle(os.path.join(data_dir,
                                           CIFAR10_TRAIN_PREFIX + str(num)))
-            self.train.images.extend(batch[CIFAR10_DATA])
-            self.train.labels.extend(batch[CIFAR10_LABEL])
+            self.train.appendImage(batch[CIFAR10_DATA])
+            self.train.appendLabel(batch[CIFAR10_LABEL])
 
         test_data = Unpickle(os.path.join(data_dir, CIFAR10_TEST))
-        self.test.images.extend(test_data[CIFAR10_DATA])
-        self.test.labels.extend(test_data[CIFAR10_LABEL])
+        self.test.appendImage(test_data[CIFAR10_DATA])
+        self.test.appendLabel(test_data[CIFAR10_LABEL])
 
         if one_hot:
             self.train.labels = _ToOneHot(self.train.labels, 10)
