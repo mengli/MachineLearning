@@ -69,15 +69,20 @@ def main(_):
 
     y_conv = tf.matmul(h_fc2, W_fc3) + b_fc3
 
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = 0.001
+    learning_rate = tf.train.exponential_decay(
+        starter_learning_rate, global_step, 100000, 0.1, staircase=True)
+
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
-    train_step = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy, global_step=global_step)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
 
-    for i in range(20000):
+    for i in range(100000):
         batch = cifar10.train.next_batch(128)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
