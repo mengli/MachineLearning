@@ -17,6 +17,7 @@ class CifarTest(unittest.TestCase):
         self._cifar.ReadDataSets(one_hot=True)
 
         self.assertEqual(len(self._cifar.train.images), 50000)
+        self.assertEqual(len(self._cifar.train.images[0]), 3072)
         self.assertEqual(len(self._cifar.train.labels[0]), 10)
         self.assertEqual(1, self._cifar.train.labels[0][6])
 

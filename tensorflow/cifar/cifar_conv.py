@@ -78,7 +78,7 @@ def main(_):
     sess.run(tf.global_variables_initializer())
 
     for i in range(20000):
-        batch = cifar10.train.next_batch(200)
+        batch = cifar10.train.next_batch(128)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
                 x: cifar10.test.images, y_: cifar10.test.labels})

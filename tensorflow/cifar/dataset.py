@@ -20,16 +20,14 @@ class DataSet(object):
         self._labels = value
 
     def appendImage(self, images):
-        if len(self._images) > 0:
-            numpy.vstack((self._images, images))
-        else:
-            self._images = numpy.array(images)
+        arr = self._images.tolist()
+        arr.extend(numpy.array(images))
+        self._images = numpy.array(arr)
 
     def appendLabel(self, labels):
-        if len(self._labels) > 0:
-            numpy.vstack((self._labels, labels))
-        else:
-            self._labels = numpy.array(labels)
+        arr = self._labels.tolist()
+        arr.extend(numpy.array(labels))
+        self._labels = numpy.array(arr)
 
     def next_batch(self, batch_size):
         start = self._index_in_epoch
