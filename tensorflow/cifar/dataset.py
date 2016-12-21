@@ -19,14 +19,18 @@ class DataSet(object):
     def labels(self, value):
         self._labels = value
 
+    @images.setter
+    def images(self, value):
+        self._images = value
+
     def appendImage(self, images):
         arr = self._images.tolist()
-        arr.extend(numpy.array(images))
+        arr.extend(images)
         self._images = numpy.array(arr)
 
     def appendLabel(self, labels):
         arr = self._labels.tolist()
-        arr.extend(numpy.array(labels))
+        arr.extend(labels)
         self._labels = numpy.array(arr)
 
     def next_batch(self, batch_size):
