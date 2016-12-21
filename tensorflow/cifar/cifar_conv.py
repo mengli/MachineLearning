@@ -10,12 +10,12 @@ import tensorflow as tf
 
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev=0.05)
-    return tf.Variable(initial)
+    return tf.Variable(initial, 'weights')
 
 
 def bias_variable(shape):
     initial = tf.constant(0.1, shape=shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, 'biases')
 
 
 def conv2d(x, W):
@@ -27,17 +27,29 @@ def max_pool_2x2(x):
                           strides=[1, 2, 2, 1], padding='SAME')
 
 
-def variable_summaries(var, name):
-    """Attach a lot of summaries to a Tensor."""
-    with tf.name_scope('summaries'):
-        mean = tf.reduce_mean(var)
-        tf.summary.scalar('mean/' + name, mean)
-    with tf.name_scope('stddev'):
-        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-        tf.summary.scalar('stddev/' + name, stddev)
-        tf.summary.scalar('max/' + name, tf.reduce_max(var))
-        tf.summary.scalar('min/' + name, tf.reduce_min(var))
-        tf.summary.histogram(name, var)
+def conv_layer(layer_name, input, in_dim, in_ch, out_dim, pooling=False):
+    with tf.name_scope(layer_name):
+        W_conv = weight_variable([in_dim, in_dim, in_ch, out_dim])
+        b_conv = bias_variable([out_dim])
+        tf.summary.histogram(layer_name + "/weights", W_conv)
+        tf.summary.histogram(layer_name + "/biases", b_conv)
+        if pooling:
+            return max_pool_2x2(tf.nn.relu(conv2d(input, W_conv) + b_conv))
+        else:
+            return tf.nn.relu(conv2d(input, W_conv) + b_conv)
+            # tf.summary.image("conv_layer1/images", tf.transpose(W_conv1, [3, 0, 1, 2]), max_outputs=8)
+
+
+def fc_layer(layer_name, input, in_dim, out_dim, activation=True):
+    with tf.name_scope(layer_name):
+        W_fc = weight_variable([in_dim, out_dim])
+        b_fc = bias_variable([out_dim])
+        tf.summary.histogram(layer_name + "/weights", W_fc)
+        tf.summary.histogram(layer_name + "/biases", b_fc)
+        if activation:
+            return tf.nn.relu(tf.matmul(input, W_fc) + b_fc)
+        else:
+            return tf.matmul(input, W_fc) + b_fc
 
 
 def main(_):
@@ -50,63 +62,22 @@ def main(_):
     # Define loss and optimizer
     y_ = tf.placeholder(tf.float32, [None, 10])
 
-    x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0,2,3,1])
-    tf.summary.image("images", x_image)
+    x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0, 2, 3, 1])
 
-    # (32 - 3 + 2 * 1) / 1 +1 = 32
-    with tf.name_scope("conv_layer1"):
-        W_conv1 = weight_variable([5, 5, 3, 32])
-        variable_summaries(W_conv1, "conv_layer1/weights")
-        b_conv1 = bias_variable([32])
-        variable_summaries(b_conv1, "conv_layer1/biases")
-        h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-        h_pool1 = max_pool_2x2(h_conv1)
-        tf.summary.image("conv_layer1/images", h_pool1[:, :, :, 0:1], max_outputs=6)
-
-    with tf.name_scope("conv_layer2"):
-        W_conv2 = weight_variable([5, 5, 32, 64])
-        variable_summaries(W_conv2, "conv_layer2/weights")
-        b_conv2 = bias_variable([64])
-        variable_summaries(b_conv2, "conv_layer2/biases")
-        h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-        h_pool2 = max_pool_2x2(h_conv2)
-        tf.summary.image("conv_layer2/images", h_pool2[:, :, :, 0:1], max_outputs=6)
-
-    with tf.name_scope("conv_layer3"):
-        W_conv3 = weight_variable([5, 5, 64, 64])
-        variable_summaries(W_conv3, "conv_layer3/weights")
-        b_conv3 = bias_variable([64])
-        variable_summaries(b_conv3, "conv_layer3/biases")
-        h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
-        tf.summary.image("conv_layer3/images", h_conv3[:, :, :, 0:1], max_outputs=6)
+    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 32, True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 32, 64, True)
+    h_conv3 = conv_layer("conv_layer3", h_pool2, 5, 64, 64)
 
     h_conv3_flat = tf.reshape(h_conv3, [-1, 8 * 8 * 64])
 
-    with tf.name_scope("fc_layer1"):
-        W_fc1 = weight_variable([8 * 8 * 64, 384])
-        variable_summaries(W_fc1, "fc_layer1/weights")
-        b_fc1 = bias_variable([384])
-        variable_summaries(b_fc1, "fc_layer1/biases")
-        h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1)
-
-    with tf.name_scope("fc_layer2"):
-        W_fc2 = weight_variable([384, 192])
-        variable_summaries(W_fc2, "fc_layer2/weights")
-        b_fc2 = bias_variable([192])
-        variable_summaries(b_fc2, "fc_layer2/biases")
-        h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2)
-
-    with tf.name_scope("output"):
-        W_fc3 = weight_variable([192, 10])
-        variable_summaries(W_fc3, "output/weights")
-        b_fc3 = bias_variable([10])
-        variable_summaries(b_fc3, "output/biases")
-        y_conv = tf.matmul(h_fc2, W_fc3) + b_fc3
+    h_fc1 = fc_layer('fc_layer1', h_conv3_flat, 8 * 8 * 64, 384)
+    h_fc2 = fc_layer('fc_layer2', h_fc1, 384, 192)
+    y_conv = fc_layer('output', h_fc2, 192, 10, False)
 
     global_step = tf.Variable(0, trainable=False)
     starter_learning_rate = 0.0005
     learning_rate = tf.train.exponential_decay(
-        starter_learning_rate, global_step, 1000, 0.1, staircase=True)
+        starter_learning_rate, global_step, 100, 0.1, staircase=True)
 
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
     tf.summary.scalar('loss', cross_entropy)
@@ -121,7 +92,7 @@ def main(_):
 
     sess.run(tf.global_variables_initializer())
 
-    for i in range(1000):
+    for i in range(100):
         batch = cifar10.train.next_batch(128)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
