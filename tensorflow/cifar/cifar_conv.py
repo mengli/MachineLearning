@@ -33,12 +33,19 @@ def max_pool_2x2(x):
                           strides=[1, 2, 2, 1], padding='SAME')
 
 
-def conv_layer(layer_name, input, in_dim, in_ch, out_dim, keep_prob=None, pooling=False):
+def conv_layer(layer_name, input, in_dim, in_ch, out_dim, keep_prob=None, pooling=False, summary_conv=False):
     with tf.name_scope(layer_name):
         W_conv = weight_variable_with_decay([in_dim, in_dim, in_ch, out_dim], 0.0005)
         b_conv = bias_variable([out_dim])
         tf.summary.histogram("weights", W_conv)
         tf.summary.histogram("biases", b_conv)
+        if summary_conv:
+            # scale weights to [0 255] and convert to uint8
+            #W_min = tf.reduce_min(W_conv)
+            #W_max = tf.reduce_max(W_conv)
+            #weights_0_to_1 = (W_conv - W_min) / (W_max - W_min)
+            #weights_0_to_255_uint8 = tf.image.convert_image_dtype(weights_0_to_1, dtype=tf.uint8)
+            tf.summary.image("weights", tf.transpose(W_conv, [3, 0, 1, 2]), max_outputs=12)
         if keep_prob != None:
             input = tf.nn.dropout(input, keep_prob)
         if pooling:
@@ -96,11 +103,11 @@ def main(_):
 
     x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0, 2, 3, 1])
 
-    h_pool1 = conv_layer("conv_layer1", x_image, 3, 3, 64, pooling=True)
-    h_pool2 = conv_layer("conv_layer2", h_pool1, 3, 64, 128, keep_prob=keep_prob, pooling=True)
-    h_pool3 = conv_layer("conv_layer3", h_pool2, 3, 128, 256, keep_prob=keep_prob, pooling=True)
-    h_pool4 = conv_layer("conv_layer4", h_pool3, 3, 256, 512, keep_prob=keep_prob, pooling=True)
-    h_pool5 = conv_layer("conv_layer5", h_pool4, 3, 512, 512, keep_prob=keep_prob, pooling=True)
+    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 64, pooling=True, summary_conv=True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 64, 128, keep_prob=keep_prob, pooling=True)
+    h_pool3 = conv_layer("conv_layer3", h_pool2, 5, 128, 256, keep_prob=keep_prob, pooling=True)
+    h_pool4 = conv_layer("conv_layer4", h_pool3, 5, 256, 512, keep_prob=keep_prob, pooling=True)
+    h_pool5 = conv_layer("conv_layer5", h_pool4, 5, 512, 512, keep_prob=keep_prob, pooling=True)
 
     h_conv3_flat = tf.reshape(h_pool5, [-1, 512])
 
