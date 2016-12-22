@@ -7,6 +7,9 @@ from __future__ import print_function
 import cifar
 import tensorflow as tf
 
+EPOCH = 5000
+BATCH_SIZE = 128
+
 
 def weight_variable_with_decay(shape, wd):
     initial = tf.truncated_normal(shape, stddev=0.05)
@@ -66,13 +69,11 @@ def loss(logits, labels):
 def learning_rate(global_step):
     starter_learning_rate = 0.001
     learning_rate_1 = tf.train.exponential_decay(
-        starter_learning_rate, global_step, 1000, 0.1, staircase=True)
+        starter_learning_rate, global_step, EPOCH * 0.2, 0.1, staircase=True)
     learning_rate_2 = tf.train.exponential_decay(
-        learning_rate_1, global_step, 2000, 0.5, staircase=True)
-    learning_rate_3 = tf.train.exponential_decay(
-        learning_rate_2, global_step, 3000, 0.5, staircase=True)
+        learning_rate_1, global_step, EPOCH * 0.4, 0.5, staircase=True)
     decayed_learning_rate = tf.train.exponential_decay(
-        learning_rate_3, global_step, 4000, 0.5, staircase=True)
+        learning_rate_2, global_step, EPOCH * 0.6, 0.5, staircase=True)
     tf.summary.scalar('learning_rate', decayed_learning_rate)
     return decayed_learning_rate
 
@@ -89,11 +90,11 @@ def main(_):
 
     x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0, 2, 3, 1])
 
-    h_pool1 = conv_layer("conv_layer1", x_image, 3, 3, 64, True)
-    h_pool2 = conv_layer("conv_layer2", h_pool1, 3, 64, 128, True)
-    h_pool3 = conv_layer("conv_layer3", h_pool2, 3, 128, 256, True)
-    h_pool4 = conv_layer("conv_layer4", h_pool3, 3, 256, 512, True)
-    h_pool5 = conv_layer("conv_layer5", h_pool4, 3, 512, 512, True)
+    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 64, True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 64, 128, True)
+    h_pool3 = conv_layer("conv_layer3", h_pool2, 5, 128, 256, True)
+    h_pool4 = conv_layer("conv_layer4", h_pool3, 5, 256, 512, True)
+    h_pool5 = conv_layer("conv_layer5", h_pool4, 5, 512, 512, True)
 
     h_conv3_flat = tf.reshape(h_pool5, [-1, 512])
 
@@ -116,8 +117,8 @@ def main(_):
 
     sess.run(tf.global_variables_initializer())
 
-    for i in range(5000):
-        batch = cifar10.train.next_batch(128)
+    for i in range(EPOCH):
+        batch = cifar10.train.next_batch(BATCH_SIZE)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
                 x: cifar10.test.images, y_: cifar10.test.labels})
