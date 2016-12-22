@@ -8,9 +8,12 @@ import cifar
 import tensorflow as tf
 
 
-def weight_variable(shape):
+def weight_variable_with_decay(shape, wd):
     initial = tf.truncated_normal(shape, stddev=0.05)
-    return tf.Variable(initial, 'weights')
+    var = tf.Variable(initial, 'weights')
+    weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+    tf.add_to_collection('losses', weight_decay)
+    return var
 
 
 def bias_variable(shape):
@@ -29,10 +32,10 @@ def max_pool_2x2(x):
 
 def conv_layer(layer_name, input, in_dim, in_ch, out_dim, pooling=False):
     with tf.name_scope(layer_name):
-        W_conv = weight_variable([in_dim, in_dim, in_ch, out_dim])
+        W_conv = weight_variable_with_decay([in_dim, in_dim, in_ch, out_dim], 0.0005)
         b_conv = bias_variable([out_dim])
-        tf.summary.histogram(layer_name + "/weights", W_conv)
-        tf.summary.histogram(layer_name + "/biases", b_conv)
+        tf.summary.histogram("weights", W_conv)
+        tf.summary.histogram("biases", b_conv)
         if pooling:
             return max_pool_2x2(tf.nn.relu(conv2d(input, W_conv) + b_conv))
         else:
@@ -42,14 +45,36 @@ def conv_layer(layer_name, input, in_dim, in_ch, out_dim, pooling=False):
 
 def fc_layer(layer_name, input, in_dim, out_dim, activation=True):
     with tf.name_scope(layer_name):
-        W_fc = weight_variable([in_dim, out_dim])
+        W_fc = weight_variable_with_decay([in_dim, out_dim], 0.0005)
         b_fc = bias_variable([out_dim])
-        tf.summary.histogram(layer_name + "/weights", W_fc)
-        tf.summary.histogram(layer_name + "/biases", b_fc)
+        tf.summary.histogram("weights", W_fc)
+        tf.summary.histogram("biases", b_fc)
         if activation:
             return tf.nn.relu(tf.matmul(input, W_fc) + b_fc)
         else:
             return tf.matmul(input, W_fc) + b_fc
+
+
+def loss(logits, labels):
+    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, labels))
+    tf.add_to_collection('losses', cross_entropy)
+    total_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
+    tf.summary.scalar('loss', total_loss)
+    return total_loss
+
+
+def learning_rate(global_step):
+    starter_learning_rate = 0.001
+    learning_rate_1 = tf.train.exponential_decay(
+        starter_learning_rate, global_step, 1000, 0.1, staircase=True)
+    learning_rate_2 = tf.train.exponential_decay(
+        learning_rate_1, global_step, 2000, 0.5, staircase=True)
+    learning_rate_3 = tf.train.exponential_decay(
+        learning_rate_2, global_step, 3000, 0.5, staircase=True)
+    decayed_learning_rate = tf.train.exponential_decay(
+        learning_rate_3, global_step, 4000, 0.5, staircase=True)
+    tf.summary.scalar('learning_rate', decayed_learning_rate)
+    return decayed_learning_rate
 
 
 def main(_):
@@ -64,24 +89,23 @@ def main(_):
 
     x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0, 2, 3, 1])
 
-    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 32, True)
-    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 32, 64, True)
-    h_conv3 = conv_layer("conv_layer3", h_pool2, 5, 64, 64)
+    h_pool1 = conv_layer("conv_layer1", x_image, 3, 3, 64, True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 3, 64, 128, True)
+    h_pool3 = conv_layer("conv_layer3", h_pool2, 3, 128, 256, True)
+    h_pool4 = conv_layer("conv_layer4", h_pool3, 3, 256, 512, True)
+    h_pool5 = conv_layer("conv_layer5", h_pool4, 3, 512, 512, True)
 
-    h_conv3_flat = tf.reshape(h_conv3, [-1, 8 * 8 * 64])
+    h_conv3_flat = tf.reshape(h_pool5, [-1, 512])
 
-    h_fc1 = fc_layer('fc_layer1', h_conv3_flat, 8 * 8 * 64, 384)
-    h_fc2 = fc_layer('fc_layer2', h_fc1, 384, 192)
-    y_conv = fc_layer('output', h_fc2, 192, 10, False)
+    h_fc1 = fc_layer('fc_layer1', h_conv3_flat, 512, 512)
+    h_fc2 = fc_layer('fc_layer2', h_fc1, 512, 512)
+    y_conv = fc_layer('output', h_fc2, 512, 10, False)
 
     global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = 0.0005
-    learning_rate = tf.train.exponential_decay(
-        starter_learning_rate, global_step, 100, 0.1, staircase=True)
+    lr = learning_rate(global_step)
 
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
-    tf.summary.scalar('loss', cross_entropy)
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy, global_step=global_step)
+    total_loss = loss(y_conv, y_)
+    train_step = tf.train.AdamOptimizer(lr).minimize(total_loss, global_step=global_step)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -92,7 +116,7 @@ def main(_):
 
     sess.run(tf.global_variables_initializer())
 
-    for i in range(100):
+    for i in range(5000):
         batch = cifar10.train.next_batch(128)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
