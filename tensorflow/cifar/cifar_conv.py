@@ -33,12 +33,14 @@ def max_pool_2x2(x):
                           strides=[1, 2, 2, 1], padding='SAME')
 
 
-def conv_layer(layer_name, input, in_dim, in_ch, out_dim, pooling=False):
+def conv_layer(layer_name, input, in_dim, in_ch, out_dim, keep_prob=None, pooling=False):
     with tf.name_scope(layer_name):
         W_conv = weight_variable_with_decay([in_dim, in_dim, in_ch, out_dim], 0.0005)
         b_conv = bias_variable([out_dim])
         tf.summary.histogram("weights", W_conv)
         tf.summary.histogram("biases", b_conv)
+        if keep_prob != None:
+            input = tf.nn.dropout(input, keep_prob)
         if pooling:
             return max_pool_2x2(tf.nn.relu(conv2d(input, W_conv) + b_conv))
         else:
@@ -46,12 +48,14 @@ def conv_layer(layer_name, input, in_dim, in_ch, out_dim, pooling=False):
             # tf.summary.image("conv_layer1/images", tf.transpose(W_conv1, [3, 0, 1, 2]), max_outputs=8)
 
 
-def fc_layer(layer_name, input, in_dim, out_dim, activation=True):
+def fc_layer(layer_name, input, in_dim, out_dim, keep_prob=None, activation=True):
     with tf.name_scope(layer_name):
         W_fc = weight_variable_with_decay([in_dim, out_dim], 0.0005)
         b_fc = bias_variable([out_dim])
         tf.summary.histogram("weights", W_fc)
         tf.summary.histogram("biases", b_fc)
+        if keep_prob != None:
+            input = tf.nn.dropout(input, keep_prob)
         if activation:
             return tf.nn.relu(tf.matmul(input, W_fc) + b_fc)
         else:
@@ -82,6 +86,8 @@ def main(_):
     cifar10 = cifar.Cifar()
     cifar10.ReadDataSets(one_hot=True)
 
+    keep_prob = tf.placeholder(tf.float32)
+
     # Create the model
     x = tf.placeholder(tf.float32, [None, 3072])
 
@@ -90,17 +96,17 @@ def main(_):
 
     x_image = tf.transpose(tf.reshape(x, [-1, 3, 32, 32]), [0, 2, 3, 1])
 
-    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 64, True)
-    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 64, 128, True)
-    h_pool3 = conv_layer("conv_layer3", h_pool2, 5, 128, 256, True)
-    h_pool4 = conv_layer("conv_layer4", h_pool3, 5, 256, 512, True)
-    h_pool5 = conv_layer("conv_layer5", h_pool4, 5, 512, 512, True)
+    h_pool1 = conv_layer("conv_layer1", x_image, 3, 3, 64, pooling=True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 3, 64, 128, keep_prob=keep_prob, pooling=True)
+    h_pool3 = conv_layer("conv_layer3", h_pool2, 3, 128, 256, keep_prob=keep_prob, pooling=True)
+    h_pool4 = conv_layer("conv_layer4", h_pool3, 3, 256, 512, keep_prob=keep_prob, pooling=True)
+    h_pool5 = conv_layer("conv_layer5", h_pool4, 3, 512, 512, keep_prob=keep_prob, pooling=True)
 
     h_conv3_flat = tf.reshape(h_pool5, [-1, 512])
 
-    h_fc1 = fc_layer('fc_layer1', h_conv3_flat, 512, 512)
-    h_fc2 = fc_layer('fc_layer2', h_fc1, 512, 512)
-    y_conv = fc_layer('output', h_fc2, 512, 10, False)
+    h_fc1 = fc_layer('fc_layer1', h_conv3_flat, 512, 512, keep_prob=keep_prob, activation=True)
+    h_fc2 = fc_layer('fc_layer2', h_fc1, 512, 512, keep_prob=keep_prob, activation=True)
+    y_conv = fc_layer('output', h_fc2, 512, 10, keep_prob=keep_prob, activation=False)
 
     global_step = tf.Variable(0, trainable=False)
     lr = learning_rate(global_step)
@@ -121,13 +127,13 @@ def main(_):
         batch = cifar10.train.next_batch(BATCH_SIZE)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
-                x: cifar10.test.images, y_: cifar10.test.labels})
+                x: cifar10.test.images, y_: cifar10.test.labels, keep_prob: 1})
             print("step %d, training accuracy %g" % (i, train_accuracy))
-        summary, _ = sess.run([merged, train_step], feed_dict={x: batch[0], y_: batch[1]})
+        summary, _ = sess.run([merged, train_step], feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.85})
         train_writer.add_summary(summary, i)
 
     print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: cifar10.test.images, y_: cifar10.test.labels}))
+        x: cifar10.test.images, y_: cifar10.test.labels, keep_prob: 1}))
 
 
 if __name__ == '__main__':
