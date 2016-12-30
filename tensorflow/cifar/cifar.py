@@ -35,33 +35,34 @@ class Cifar(object):
 
         UnzipTarGzFile(file_path)
 
-        # Read training samples from data_batch_1, data_batch_2,..., data_batch_6
-        batch1 = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + "1"))
-        batch2 = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + "2"))
-        batch3 = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + "3"))
-        batch4 = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + "4"))
-        batch5 = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + "5"))
+        xs = []
+        ys = []
+        for j in range(5):
+          d = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + `j+1`))
+          x = d[CIFAR10_DATA]
+          y = d[CIFAR10_LABEL]
+          xs.append(x)
+          ys.append(y)
 
-        batch1_data = batch1[CIFAR10_DATA]
-        batch2_data = batch2[CIFAR10_DATA]
-        batch3_data = batch3[CIFAR10_DATA]
-        batch4_data = batch4[CIFAR10_DATA]
-        batch5_data = batch5[CIFAR10_DATA]
+        d = Unpickle(os.path.join(data_dir, CIFAR10_TEST))
+        xs.append(d[CIFAR10_DATA])
+        ys.append(d[CIFAR10_LABEL])
 
-        batch1_labels = batch1[CIFAR10_LABEL]
-        batch2_labels = batch2[CIFAR10_LABEL]
-        batch3_labels = batch3[CIFAR10_LABEL]
-        batch4_labels = batch4[CIFAR10_LABEL]
-        batch5_labels = batch5[CIFAR10_LABEL]
+        x = numpy.concatenate(xs) / numpy.float32(255)
+        y = numpy.concatenate(ys)
+        x = numpy.dstack((x[:, :1024], x[:, 1024:2048], x[:, 2048:]))
+        x = x.reshape((x.shape[0], 32, 32, 3)).transpose(0,3,1,2)
 
-        self.train.images = numpy.concatenate(
-            (batch1_data, batch2_data, batch3_data, batch4_data, batch5_data))
-        self.train.labels = numpy.concatenate(
-            (batch1_labels, batch2_labels, batch3_labels, batch4_labels, batch5_labels))
+        # subtract per-pixel mean
+        pixel_mean = numpy.mean(x[0:50000],axis=0)
+        x -= pixel_mean
 
-        test_data = Unpickle(os.path.join(data_dir, CIFAR10_TEST))
-        self.test.images = test_data[CIFAR10_DATA]
-        self.test.labels = test_data[CIFAR10_LABEL]
+        # create mirrored images
+        self.train.images = x[0:50000,:,:,:]
+        self.train.labels = y[0:50000]
+
+        self.test.images = x[50000:,:,:,:]
+        self.test.labels = y[50000:]
 
         if one_hot:
             train_labels = numpy.zeros((50000, 10), dtype=numpy.float32)
