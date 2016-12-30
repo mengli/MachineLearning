@@ -7,7 +7,7 @@ from __future__ import print_function
 import cifar
 import tensorflow as tf
 
-EPOCH = 5000
+EPOCH = 36000
 BATCH_SIZE = 128
 
 
@@ -51,16 +51,17 @@ def put_kernels_on_grid(kernel, (grid_Y, grid_X), pad=1):
     # X and Y dimensions, w.r.t. padding
     Y = kernel.get_shape()[0] + pad
     X = kernel.get_shape()[1] + pad
+    ch = kernel.get_shape()[2]
 
     # put NumKernels to the 1st dimension
     x2 = tf.transpose(x1, (3, 0, 1, 2))
     # organize grid on Y axis
-    x3 = tf.reshape(x2, tf.pack([grid_X, Y * grid_Y, X, 3]))
+    x3 = tf.reshape(x2, tf.pack([grid_X, Y * grid_Y, X, ch]))
 
     # switch X and Y axes
     x4 = tf.transpose(x3, (0, 2, 1, 3))
     # organize grid on X axis
-    x5 = tf.reshape(x4, tf.pack([1, X * grid_X, Y * grid_Y, 3]))
+    x5 = tf.reshape(x4, tf.pack([1, X * grid_X, Y * grid_Y, ch]))
 
     # back to normal order (not combining with the next step for clarity)
     x6 = tf.transpose(x5, (2, 1, 3, 0))
@@ -77,30 +78,52 @@ def put_kernels_on_grid(kernel, (grid_Y, grid_X), pad=1):
     return x8
 
 
-def conv_layer(layer_name, input, in_dim, in_ch, out_dim, summary_conv=False):
+def conv_layer(layer_name, input, in_dim, in_ch, out_dim, out_size, summary_conv=False):
     with tf.name_scope(layer_name):
+        # Initialize weights and bias
         W_conv = weight_variable_with_decay([in_dim, in_dim, in_ch, out_dim], 0.004)
         b_conv = bias_variable([out_dim])
+
+        # Log weights and bias
         tf.summary.histogram("weights", W_conv)
         tf.summary.histogram("biases", b_conv)
+
+        # Draw weights in 8x8 grid for the first conv layer
         if summary_conv:
             kernel_grid = put_kernels_on_grid(W_conv, (8, 8))
             tf.summary.image("kernel", kernel_grid, max_outputs=1)
-            #tf.summary.image("kernel", tf.transpose(W_conv, [3, 0, 1, 2]), max_outputs=64)
+
+        # Draw conv activation in 8x8 grid
         activation = tf.nn.bias_add(conv2d(input, W_conv), b_conv)
-        activation_dim = tf.shape(activation)[1]
-        activation_sample = tf.slice(activation, [0, 0, 0, 0], [1, activation_dim, activation_dim, out_dim])
-        tf.summary.image("activatins", tf.transpose(activation_sample, [3, 1, 2, 0]), max_outputs=out_dim)
-        pool = max_pool_2x2(tf.nn.relu(activation))
+        # Only draw the activation for the first image in a batch
+        activation_sample = tf.slice(activation, [0, 0, 0, 0], [1, out_size, out_size, out_dim])
+        activation_grid = put_kernels_on_grid(tf.transpose(activation_sample, [1, 2, 0, 3]), (8, 8))
+        tf.summary.image("conv/activatins", activation_grid, max_outputs=1)
+
+        # Draw relu activation in 8x8 grid
+        activation = tf.nn.relu(activation)
+        # Only draw the activation for the first image in a batch
+        activation_sample = tf.slice(activation, [0, 0, 0, 0], [1, out_size, out_size, out_dim])
+        activation_grid = put_kernels_on_grid(tf.transpose(activation_sample, [1, 2, 0, 3]), (8, 8))
+        tf.summary.image("relu/activatins", activation_grid, max_outputs=1)
+
+        # 2x2 max pooling
+        pool = max_pool_2x2(activation)
+
         return tf.nn.lrn(pool, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm')
 
 
 def fc_layer(layer_name, input, in_dim, out_dim, activation=True):
     with tf.name_scope(layer_name):
+        # Initialize weights and bias
         W_fc = weight_variable_with_decay([in_dim, out_dim], 0.004)
         b_fc = bias_variable([out_dim])
+
+        # Log weights and bias
         tf.summary.histogram("weights", W_fc)
         tf.summary.histogram("biases", b_fc)
+
+        # Shouldn't only apply activation function for the last fc layer
         if activation:
             return tf.nn.relu(tf.nn.bias_add(tf.matmul(input, W_fc), b_fc))
         else:
@@ -143,11 +166,8 @@ def main(_):
 
     tf.summary.image("images", x_image, max_outputs=1)
 
-    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 64, summary_conv=True)
-    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 64, 64)
-    #h_pool3 = conv_layer("conv_layer3", h_pool2, 5, 128, 256)
-    #h_pool4 = conv_layer("conv_layer4", h_pool3, 5, 256, 512)
-    #h_pool5 = conv_layer("conv_layer5", h_pool4, 5, 512, 512)
+    h_pool1 = conv_layer("conv_layer1", x_image, 5, 3, 64, 32, summary_conv=True)
+    h_pool2 = conv_layer("conv_layer2", h_pool1, 5, 64, 64, 16)
 
     h_conv3_flat = tf.reshape(h_pool2, [-1, 8 * 8 * 64])
 
@@ -159,13 +179,11 @@ def main(_):
     lr = learning_rate(global_step)
 
     total_loss = loss(y_conv, y_)
-    #train_step = tf.train.AdamOptimizer(lr).minimize(total_loss, global_step=global_step)
     optimizer = tf.train.AdamOptimizer(lr)
     grads_and_vars = optimizer.compute_gradients(total_loss)
     with tf.name_scope("conv_layer1_grad"):
         kernel_grad_grid = put_kernels_on_grid(grads_and_vars[0][0], (8, 8))
         tf.summary.image("weight_grad", kernel_grad_grid, max_outputs=1)
-        #tf.summary.image("weight_grad", tf.transpose(grads_and_vars[0][0], [3, 0, 1, 2]), max_outputs=64)
 
     train_step = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
@@ -181,9 +199,6 @@ def main(_):
     for i in range(EPOCH):
         batch = cifar10.train.next_batch(BATCH_SIZE)
         if i % 100 == 0:
-            #train_batch = cifar10.train.next_batch(BATCH_SIZE)
-            #train_accuracy = accuracy.eval(feed_dict={x: train_batch[0], y_: train_batch[1]})
-            #print("step %d, training accuracy %g" % (i, train_accuracy))
             test_accuracy = accuracy.eval(feed_dict={x: cifar10.test.images, y_: cifar10.test.labels})
             print("step %d, test accuracy %g" % (i, test_accuracy))
         summary, _ = sess.run([merged, train_step], feed_dict={x: batch[0], y_: batch[1]})
