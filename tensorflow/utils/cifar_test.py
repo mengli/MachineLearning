@@ -1,5 +1,6 @@
 import unittest
-import cifar
+
+from tensorflow.utils import cifar
 
 
 class CifarTest(unittest.TestCase):

@@ -9,7 +9,7 @@ import scipy.io
 FLAGS = None
 
 SVHN_TRAIN_FILE_NAME = 'train_32x32.mat'
-SVHN_TEST_FILE_NAME = 'train_32x32.mat'
+SVHN_TEST_FILE_NAME = 'test_32x32.mat'
 SVHN_DATA = 'X'
 SVHN_LABEL = 'y'
 
@@ -20,16 +20,17 @@ class SVHN(object):
         self.test = dataset.DataSet()
 
     def ReadDataSets(self, data_dir=".", one_hot=False):
-        file_path = os.path.join(data_dir, SVHN_TRAIN_FILE_NAME)
-        if not os.path.isfile(file_path):
+        train_file_path = os.path.join(data_dir, SVHN_TRAIN_FILE_NAME)
+        test_file_path = os.path.join(data_dir, SVHN_TEST_FILE_NAME)
+        if not os.path.isfile(train_file_path) and not os.path.isfile(test_file_path):
             print("SVHN dataset not found.")
             return
 
-        read_input = scipy.io.loadmat('train_32x32.mat')
+        read_input = scipy.io.loadmat(train_file_path)
         self.train.images = read_input[SVHN_DATA]
         self.train.labels = read_input[SVHN_LABEL]
 
-        read_input = scipy.io.loadmat('test_32x32.mat')
+        read_input = scipy.io.loadmat(test_file_path)
         self.test.images = read_input[SVHN_DATA]
         self.test.labels = read_input[SVHN_LABEL]
 

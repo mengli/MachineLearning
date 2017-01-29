@@ -6,12 +6,13 @@ produced with cPickle. Here is a Python routine which will open such a file
 and return a dictionary:
 """
 
-import pickle
 import os.path
-import dataset
-import urllib2
+import pickle
 import tarfile
+import urllib2
+
 import numpy
+import dataset
 
 FLAGS = None
 
@@ -28,7 +29,7 @@ class Cifar(object):
         self.train = dataset.DataSet()
         self.test = dataset.DataSet()
 
-    def ReadDataSets(self, data_dir=".", one_hot=False):
+    def ReadDataSets(self, data_dir=".", one_hot=False, raw=False):
         file_path = os.path.join(data_dir, CIFAR10_FILE_NAME)
         if not os.path.isfile(file_path):
             _DownloadCifar10(data_dir)
@@ -38,11 +39,11 @@ class Cifar(object):
         xs = []
         ys = []
         for j in range(5):
-          d = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + `j+1`))
-          x = d[CIFAR10_DATA]
-          y = d[CIFAR10_LABEL]
-          xs.append(x)
-          ys.append(y)
+            d = Unpickle(os.path.join(data_dir, CIFAR10_TRAIN_PREFIX + `j + 1`))
+            x = d[CIFAR10_DATA]
+            y = d[CIFAR10_LABEL]
+            xs.append(x)
+            ys.append(y)
 
         d = Unpickle(os.path.join(data_dir, CIFAR10_TEST))
         xs.append(d[CIFAR10_DATA])
@@ -50,18 +51,25 @@ class Cifar(object):
 
         x = numpy.concatenate(xs) / numpy.float32(255)
         y = numpy.concatenate(ys)
-        x = numpy.dstack((x[:, :1024], x[:, 1024:2048], x[:, 2048:]))
-        x = x.reshape((x.shape[0], 32, 32, 3)).transpose(0,3,1,2)
+        if not raw:
+            x = numpy.dstack((x[:, :1024], x[:, 1024:2048], x[:, 2048:]))
+            x = x.reshape((x.shape[0], 32, 32, 3)).transpose(0, 3, 1, 2)
 
         # subtract per-pixel mean
-        pixel_mean = numpy.mean(x[0:50000],axis=0)
+        pixel_mean = numpy.mean(x[0:50000], axis=0)
         x -= pixel_mean
 
         # create mirrored images
-        self.train.images = x[0:50000,:,:,:]
+        if not raw:
+            self.train.images = x[0:50000, :, :, :]
+        else:
+            self.train.images = x[0:50000]
         self.train.labels = y[0:50000]
 
-        self.test.images = x[50000:,:,:,:]
+        if not raw:
+            self.test.images = x[50000:, :, :, :]
+        else:
+            self.train.images = x[0:50000]
         self.test.labels = y[50000:]
 
         if one_hot:
