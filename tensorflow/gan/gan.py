@@ -8,39 +8,45 @@ os.environ["KERAS_BACKEND"] = "tensorflow"
 
 from keras.layers import Dense
 from keras.models import Sequential
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import seaborn as sns
 
-np.random.seed(1337)
+sns.set(color_codes=True)
+np.random.seed(688)
 
 RANDOM_PORTION = 0.01
-HIDDEN_SIZE = 4
-BATCH_SIZE = 64
-EPOCH = 50000
+HIDDEN_SIZE = 16
+BATCH_SIZE = 256
+EPOCH = 15000
+SAMPLE_RATE = 50
 
 
 class DataDistribution(object):
     def __init__(self):
         self.mu = 4
-        self.sigma = 0.5
+        self.sigma = .5
 
     def sample(self, N):
         samples = np.random.normal(self.mu, self.sigma, N)
         samples.sort()
         return samples
 
+
 class GeneratorDistribution(object):
-    def __init__(self, range):
-        self.range = range
+    def __init__(self, low, high):
+        self._low = low
+        self._high = high
 
     def sample(self, N):
-        return np.linspace(-self.range, self.range, N) + np.random.random(N) * RANDOM_PORTION
+        return np.linspace(self._low, self._high, N) + np.random.random(N) * RANDOM_PORTION
 
 
 def generator(hidden_size):
     model = Sequential()
 
-    model.add(Dense(hidden_size, activation='softplus', batch_input_shape=(BATCH_SIZE, 1), init='normal',  name="g0"))
+    model.add(Dense(hidden_size, activation='softplus', batch_input_shape=(BATCH_SIZE, 1), init='normal', name="g0"))
     model.add(Dense(1, init='normal', name="g1"))
 
     return model
@@ -77,7 +83,28 @@ def optimizer(loss, var_list):
     return optimizer
 
 
+def export_animation(anim_frames):
+    i = 0
+    for t_data, g_data in anim_frames:
+        f, ax = plt.subplots(figsize=(12, 8))
+        f.suptitle('Generative Adversarial Network', fontsize=15)
+        plt.xlabel('Data values')
+        plt.ylabel('Probability density')
+        ax.set_xlim(-2, 10)
+        ax.set_ylim(0, 1.2)
+        sns.distplot(t_data, hist=False, rug=True, color='r', label='Target Data', ax=ax)
+        sns.distplot(g_data, hist=False, rug=True, color='g', label='Generated Data', ax=ax)
+        f.savefig("images/frame_" + str(i) + ".png")
+        print "Frame index: ", i * SAMPLE_RATE
+        f.clf()
+        plt.close()
+        i += 1
+
+# Generate mp4 from images:
+# avconv -r 10 -i frame_%d.png -b:v 1000k gan.mp4
+
 def train(_):
+    anim_frames = []
     with tf.variable_scope('GAN'):
         G = generator(HIDDEN_SIZE)
         D = discriminator(HIDDEN_SIZE)
@@ -112,7 +139,7 @@ def train(_):
         for step in xrange(EPOCH):
             # update discriminator
             x = DataDistribution().sample(BATCH_SIZE)
-            gen = GeneratorDistribution(8)
+            gen = GeneratorDistribution(-2, 10)
             z = gen.sample(BATCH_SIZE)
             _, _, summary = session.run([loss_d, opt_d, merged], {
                 X: np.reshape(x, (BATCH_SIZE, 1)),
@@ -121,15 +148,23 @@ def train(_):
 
             # update generator
             z = gen.sample(BATCH_SIZE)
-            _, _, summary = session.run([loss_g, opt_g, merged], {
+            _,  _, summary = session.run([loss_g, opt_g, merged], {
+                X: np.reshape(x, (BATCH_SIZE, 1)),
+                Z: np.reshape(z, (BATCH_SIZE, 1))
+            })
+
+            G_gen = session.run([G_train], {
                 X: np.reshape(x, (BATCH_SIZE, 1)),
                 Z: np.reshape(z, (BATCH_SIZE, 1))
             })
 
             train_writer.add_summary(summary, step)
 
-            if step % 10 == 0:
+            if step % SAMPLE_RATE == 0:
+                anim_frames.append((x, G_gen))
                 print "step: ", step
+
+        export_animation(anim_frames)
 
 
 if __name__ == "__main__":
