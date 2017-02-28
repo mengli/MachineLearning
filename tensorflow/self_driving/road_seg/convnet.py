@@ -7,7 +7,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 EPOCH = 1000
-BATCH_SIZE = 1
 N_cl = 2
 
 
@@ -131,7 +130,6 @@ def learning_rate(global_step):
 
 def main(_):
     kitti_data = kitti.Kitti()
-    kitti_data.ReadDataSets()
 
     # Create the model
     x = tf.placeholder(tf.float32, [None, 3, 1280, 384])
@@ -215,18 +213,18 @@ def main(_):
     sess.run(tf.global_variables_initializer())
 
     for i in range(EPOCH):
-        batch = kitti_data.train.next_batch(BATCH_SIZE)
-        if i % 100 == 0:
-            test_batch = kitti_data.train.next_batch(BATCH_SIZE)
-            test_accuracy = accuracy.eval(feed_dict={x: test_batch[0], y_: test_batch[1]})
+        t_img, t_label = kitti_data.next_batch()
+        if i % 50 == 0:
+            v_img, v_label = kitti_data.next_batch()
+            test_accuracy = accuracy.eval(feed_dict={x: v_img, y_: v_label})
             print("step %d, test accuracy %g" % (i, test_accuracy))
             saver.save(sess, './checkpoints/roadseg_model', global_step=i)
-        summary, _ = sess.run([merged, optimizer], feed_dict={x: batch[0], y_: batch[1]})
+        summary, _ = sess.run([merged, optimizer], feed_dict={x: t_img, y_: t_label})
         train_writer.add_summary(summary, i)
 
-    test_batch = kitti_data.train.next_batch(BATCH_SIZE)
+    final_v_img, final_v_label = kitti_data.next_batch()
     print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: test_batch[0], y_: test_batch[1]}))
+        x: final_v_img, y_: final_v_label}))
 
 
 if __name__ == '__main__':
