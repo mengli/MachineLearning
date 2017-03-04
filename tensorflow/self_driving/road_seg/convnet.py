@@ -5,12 +5,13 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from utils import kitti
 
 EPOCH = 1000
 N_cl = 2
 
 
-def weight_variable_with_decay(shape, wd):
+def weight_variable(shape):
     return tf.Variable(tf.truncated_normal(shape, stddev=0.01, dtype=tf.float32), 'weights')
 
 
@@ -24,6 +25,7 @@ def conv2d(x, W):
 
 def deconv2d(x, W):
     x_shape = tf.shape(x)
+    W_shape = tf.shape(W)
     output_shape = tf.pack([x_shape[0], x_shape[1], x_shape[2], W_shape[2]])
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=[1, 1, 1, 1], padding='SAME')
 
@@ -72,7 +74,7 @@ def unpool_2x2(x, raveled_argmax, out_shape):
 def conv_layer(layer_name, input, filter_w, filter_h, in_ch, out_dim):
     with tf.name_scope(layer_name):
         # Initialize weights and bias
-        W_conv = weight_variable_with_decay([filter_w, filter_h, in_ch, out_dim], 0.004)
+        W_conv = weight_variable([filter_w, filter_h, in_ch, out_dim])
         b_conv = bias_variable([out_dim])
 
         # Log weights and bias
@@ -85,7 +87,7 @@ def conv_layer(layer_name, input, filter_w, filter_h, in_ch, out_dim):
 def deconv_layer(layer_name, input, filter_w, filter_h, in_ch, out_dim):
     with tf.name_scope(layer_name):
         # Initialize weights and bias
-        W_conv = weight_variable_with_decay([filter_w, filter_h, in_ch, out_dim], 0.004)
+        W_conv = weight_variable([filter_w, filter_h, out_dim, in_ch])
         b_conv = bias_variable([out_dim])
 
         # Log weights and bias
@@ -93,23 +95,6 @@ def deconv_layer(layer_name, input, filter_w, filter_h, in_ch, out_dim):
         tf.summary.histogram("biases", b_conv)
 
         return tf.nn.bias_add(deconv2d(input, W_conv), b_conv)
-
-
-def fc_layer(layer_name, input, in_dim, out_dim, activation=True):
-    with tf.name_scope(layer_name):
-        # Initialize weights and bias
-        W_fc = weight_variable_with_decay([in_dim, out_dim], 0.004)
-        b_fc = bias_variable([out_dim])
-
-        # Log weights and bias
-        tf.summary.histogram("weights", W_fc)
-        tf.summary.histogram("biases", b_fc)
-
-        # Shouldn't only apply activation function for the last fc layer
-        if activation:
-            return tf.nn.relu(tf.nn.bias_add(tf.matmul(input, W_fc), b_fc))
-        else:
-            return tf.nn.bias_add(tf.matmul(input, W_fc), b_fc)
 
 
 def loss(logits, labels):
@@ -132,37 +117,35 @@ def main(_):
     kitti_data = kitti.Kitti()
 
     # Create the model
-    x = tf.placeholder(tf.float32, [None, 3, 1280, 384])
+    x_image = tf.placeholder(tf.float32, [1, None, None, 3])
 
     # Define loss and optimizer
-    y_ = tf.placeholder(tf.float32, [None, 1242, 375, N_cl])
-
-    x_image = tf.transpose(x, [0, 2, 3, 1])
+    y_ = tf.placeholder(tf.float32, [1, None, None, N_cl])
 
     tf.summary.image("images", x_image, max_outputs=1)
 
     conv1_1 = conv_layer("conv_layer1_1", x_image, 3, 3, 3, 64)
     conv1_2 = conv_layer("conv_layer1_2", conv1_1, 3, 3, 64, 64)
-    pool1, pool_1_argmax = max_pool_2x2(conv1_2)  # 640 x 192
+    pool1, pool_1_argmax = max_pool_2x2(conv1_2)
 
     conv2_1 = conv_layer("conv_layer2_1", pool1, 3, 3, 64, 128)
     conv2_2 = conv_layer("conv_layer2_2", conv2_1, 3, 3, 128, 128)
-    pool2, pool_2_argmax = max_pool_2x2(conv2_2)  # 320 x 96
+    pool2, pool_2_argmax = max_pool_2x2(conv2_2)
 
     conv3_1 = conv_layer("conv_layer3_1", pool2, 3, 3, 128, 256)
     conv3_2 = conv_layer("conv_layer3_2", conv3_1, 3, 3, 256, 256)
     conv3_3 = conv_layer("conv_layer3_2", conv3_2, 3, 3, 256, 256)
-    pool3, pool_3_argmax = max_pool_2x2(conv3_3)  # 160 x 48
+    pool3, pool_3_argmax = max_pool_2x2(conv3_3)
 
     conv4_1 = conv_layer("conv_layer4_1", pool3, 3, 3, 256, 512)
     conv4_2 = conv_layer("conv_layer4_2", conv4_1, 3, 3, 512, 512)
     conv4_3 = conv_layer("conv_layer4_2", conv4_2, 3, 3, 512, 512)
-    pool4, pool_4_argmax = max_pool_2x2(conv4_3)  # 80 x 24
+    pool4, pool_4_argmax = max_pool_2x2(conv4_3)
 
     conv5_1 = conv_layer("conv_layer5_1", pool4, 3, 3, 512, 512)
     conv5_2 = conv_layer("conv_layer5_2", conv5_1, 3, 3, 512, 512)
     conv5_3 = conv_layer("conv_layer5_2", conv5_2, 3, 3, 512, 512)
-    pool5, pool_5_argmax = max_pool_2x2(conv5_3)  # 40 x 12
+    pool5, pool_5_argmax = max_pool_2x2(conv5_3)
 
     fc_conv6 = conv_layer("fc_conv_layer6", pool5, 40, 12, 512, 4096)
     fc_conv7 = conv_layer("fc_conv_layer7", fc_conv6, 1, 1, 4096, 4096)
@@ -194,9 +177,19 @@ def main(_):
 
     score_1 = deconv_layer("score_1", deconv1_1, 3, 3, 32, N_cl)
 
-    logits = tf.reshape(score_1, [-1, N_cl])
+    print('E')
+
+    squeezed_score_1 = tf.squeeze(score_1)
+    target_shape = tf.shape(y_)
+    resized_score_1 = tf.image.resize_image_with_crop_or_pad(squeezed_score_1, target_shape[1], target_shape[0])
+
+    print('F')
+
+    logits = tf.reshape(resized_score_1, [-1, N_cl])
     labels = tf.reshape(y_, [-1, N_cl])
     total_loss = loss(logits, labels)
+
+    print('G')
 
     global_step = tf.Variable(0, trainable=False)
     lr = learning_rate(global_step)
@@ -205,21 +198,30 @@ def main(_):
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=1)
-    config = tf.ConfigProto(allow_soft_placement=True)
-    sess = tf.InteractiveSession(config=config)
+    print('H')
+
+    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.2)
+    sess = tf.InteractiveSession()
+    print('H1')
     merged = tf.summary.merge_all()
+    print('H2')
     train_writer = tf.summary.FileWriter('train', sess.graph)
+    print('H3')
     sess.run(tf.global_variables_initializer())
+    print('H4')
 
     for i in range(EPOCH):
+        print('A')
         t_img, t_label = kitti_data.next_batch()
+        print('B')
         if i % 50 == 0:
             v_img, v_label = kitti_data.next_batch()
             test_accuracy = accuracy.eval(feed_dict={x: v_img, y_: v_label})
             print("step %d, test accuracy %g" % (i, test_accuracy))
             saver.save(sess, './checkpoints/roadseg_model', global_step=i)
+        print('C')
         summary, _ = sess.run([merged, optimizer], feed_dict={x: t_img, y_: t_label})
+        print('D')
         train_writer.add_summary(summary, i)
 
     final_v_img, final_v_label = kitti_data.next_batch()

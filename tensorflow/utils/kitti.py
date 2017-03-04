@@ -44,11 +44,11 @@ class Kitti(object):
         for i in range(0, self._file_count):
             train_file_name = train_data_dir + train_file_temp % i
             gt_file_name = gt_data_dir + gt_file_temp % i
+            print(train_file_name)
             x = get_training_data(train_file_name)
             y = get_ground_truth(gt_file_name)
 
-            x = numpy.transpose(x, (0, 3, 2, 1))
-            x = x / numpy.float32(255)
+            x = numpy.transpose(x, (0, 2, 1, 3)) / numpy.float32(255)
             y = numpy.transpose(y, (0, 2, 1, 3))
 
             self._images.append(x)
@@ -83,9 +83,7 @@ def main(_):
         print "images"
         print img.shape
         print "labels"
-        print label.sum()
-        print label[:,:,:,0:1].sum()
-        print label[:, :, :, 1:].sum()
+        print label.shape
 
 
 if __name__ == '__main__':
