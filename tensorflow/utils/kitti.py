@@ -1,8 +1,8 @@
 import os
-import cv2
-
 import numpy
 import tensorflow as tf
+import scipy as scp
+import scipy.misc
 
 
 KITTI_TRAIN_DIR_PREFIX = '/Users/limeng/Downloads/kitti/data_road/training/image_2/'
@@ -48,9 +48,6 @@ class Kitti(object):
             x = get_training_data(train_file_name)
             y = get_ground_truth(gt_file_name)
 
-            x = numpy.transpose(x, (0, 2, 1, 3)) / numpy.float32(255)
-            y = numpy.transpose(y, (0, 2, 1, 3))
-
             self._images.append(x)
             self._labels.append(y)
 
@@ -62,16 +59,15 @@ class Kitti(object):
 
 def get_training_data(file_name):
     assert os.path.isfile(file_name), 'Cannot find: %s' % file_name
-    training_data = cv2.imread(file_name, cv2.IMREAD_UNCHANGED)
+    training_data = scp.misc.imread(file_name, mode='RGB')
     return numpy.expand_dims(training_data, axis=0)
 
 
 def get_ground_truth(fileNameGT):
     assert os.path.isfile(fileNameGT), 'Cannot find: %s' % fileNameGT
-    full_gt = cv2.imread(fileNameGT, cv2.IMREAD_UNCHANGED)
-    # attention: OpenCV reads in as BGR, so first channel has Blue / road GT
-    roadArea = (full_gt[:, :, 0] > 0) * 1
-    notRoadArea = (full_gt[:, :, 0] == 0) * 1
+    full_gt = scp.misc.imread(fileNameGT, mode='RGB')
+    roadArea = (full_gt[:, :, 2] > 0)
+    notRoadArea = (full_gt[:, :, 2] == 0)
     gt_data = numpy.dstack((roadArea, notRoadArea))
     return numpy.expand_dims(gt_data, axis=0)
 
