@@ -12,8 +12,9 @@ import scipy.misc
 import matplotlib as mpl
 import matplotlib.cm
 
-EPOCH = 100
+EPOCH = 1000
 N_cl = 2
+UU_TRAIN_SET_SIZE = 98
 
 
 def _compute_cross_entropy_mean(labels, softmax):
@@ -46,6 +47,23 @@ def loss(logits, labels):
     return losses
 
 
+def f1_score(logits, labels):
+    labels = tf.to_float(tf.reshape(labels, (-1, 2)))[:, 1]
+    logits = tf.reshape(logits, (-1, 2))
+    epsilon = 1e-9
+    softmax = (tf.nn.softmax(logits) + epsilon)[:, 1]
+
+    true_positives = tf.reduce_sum(softmax * labels)
+    false_positives = tf.reduce_sum((1 - softmax) * labels)
+
+    precision = true_positives / (true_positives + false_positives + epsilon)
+    recall = true_positives / tf.reduce_sum(labels)
+
+    f1_score = 2 * precision * recall / (precision + recall)
+
+    return f1_score
+
+
 def learning_rate(global_step):
     starter_learning_rate = 1e-5
     learning_rate_1 = tf.train.exponential_decay(
@@ -76,8 +94,10 @@ def main(_):
     vgg_fcn.build(x_image, debug=True, num_classes=N_cl)
 
     losses = loss(vgg_fcn.upscore32, y_)
+    f1 = f1_score(vgg_fcn.upscore32, y_)
     total_loss = losses['total_loss']
     tf.summary.scalar("Loss", total_loss)
+    tf.summary.scalar("F1 Score", f1)
 
     global_step = tf.Variable(0, trainable=False)
     lr = learning_rate(global_step)
@@ -90,11 +110,7 @@ def main(_):
 
     train_step = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
-    #tf.summary.image("Segmentation", expanded_score_1, max_outputs=1)
-    #accuracy = tf.reduce_mean(tf.pow(tf.sigmoid(expanded_score_1) - y_, 2))
-    #tf.summary.scalar("Accuracy", accuracy)
-
-    # saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.2)
+    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.2)
     sess = tf.InteractiveSession()
     merged = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter('train', sess.graph)
@@ -103,19 +119,12 @@ def main(_):
     for i in range(EPOCH):
         print("step %d" % i)
         t_img, t_label = kitti_data.next_batch()
-        #if i % 5 == 0:
-            #v_img, v_label = kitti_data.next_batch()
-            #test_accuracy = accuracy.eval(feed_dict={x_image: v_img, y_: v_label})
-            #print("step %d, test accuracy %g" % (i, test_accuracy))
-            # saver.save(sess, './checkpoints/roadseg_model', global_step=i)
+        if i % 5 == 0:
+            saver.save(sess, './checkpoints/roadseg_model', global_step=i)
         up_s, summary, _ = sess.run([vgg_fcn.pred_up, merged, train_step], feed_dict={x_image: t_img, y_: t_label})
         up_color = color_image(up_s[0], 2)
-        scp.misc.imsave('output/decision_%d.png' % i, up_color)
+        scp.misc.imsave('output/decision_%d.png' % (i % UU_TRAIN_SET_SIZE), up_color)
         train_writer.add_summary(summary, i)
-
-    #final_v_img, final_v_label = kitti_data.next_batch()
-    #print("test accuracy %g" % accuracy.eval(feed_dict={
-    #    x_image: final_v_img, y_: final_v_label}))
 
 
 if __name__ == '__main__':
