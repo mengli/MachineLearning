@@ -12,7 +12,7 @@ import scipy.misc
 import matplotlib as mpl
 import matplotlib.cm
 
-EPOCH = 1000
+EPOCH = 500
 N_cl = 2
 UU_TRAIN_SET_SIZE = 98
 
@@ -124,6 +124,10 @@ def main(_):
         up_s, summary, _ = sess.run([vgg_fcn.pred_up, merged, train_step], feed_dict={x_image: t_img, y_: t_label})
         up_color = color_image(up_s[0], 2)
         scp.misc.imsave('output/decision_%d.png' % (i % UU_TRAIN_SET_SIZE), up_color)
+        merge_decision = t_img[0]
+        merge_green = up_s[0] * merge_decision[..., 1] + (1 - up_s[0]) * 255
+        merge_decision[..., 1] = merge_green
+        scp.misc.imsave('merge/decision_%d.png' % (i % UU_TRAIN_SET_SIZE), merge_decision)
         train_writer.add_summary(summary, i)
 
 

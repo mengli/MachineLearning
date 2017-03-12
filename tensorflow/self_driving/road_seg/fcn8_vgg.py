@@ -133,7 +133,7 @@ class FCN8VGG:
                                              debug=debug, name='upscore32',
                                              ksize=16, stride=8)
 
-        self.pred_up = tf.argmax(self.upscore32, dimension=3)
+        self.pred_up = tf.argmax(self.upscore32, dimension=3)  # Max value's index
 
     def _max_pool(self, bottom, name, debug):
         pool = tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],
