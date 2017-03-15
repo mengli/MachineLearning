@@ -12,7 +12,7 @@ import scipy.misc
 import matplotlib as mpl
 import matplotlib.cm
 
-EPOCH = 500
+EPOCH = 1000
 N_cl = 2
 UU_TRAIN_SET_SIZE = 98
 
@@ -48,20 +48,18 @@ def loss(logits, labels):
 
 
 def f1_score(logits, labels):
-    labels = tf.to_float(tf.reshape(labels, (-1, 2)))[:, 1]
-    logits = tf.reshape(logits, (-1, 2))
-    epsilon = 1e-9
-    softmax = (tf.nn.softmax(logits) + epsilon)[:, 1]
+    true_labels = tf.to_float(tf.reshape(labels, (-1, 2)))[:, 1]
+    pred = tf.to_float(tf.reshape(logits, [-1]))
 
-    true_positives = tf.reduce_sum(softmax * labels)
-    false_positives = tf.reduce_sum((1 - softmax) * labels)
+    true_positives = tf.reduce_sum(pred * true_labels)
+    false_positives = tf.reduce_sum(pred * (1 - true_labels))
 
-    precision = true_positives / (true_positives + false_positives + epsilon)
+    precision = true_positives / (true_positives + false_positives)
     recall = true_positives / tf.reduce_sum(labels)
 
     f1_score = 2 * precision * recall / (precision + recall)
 
-    return f1_score
+    return f1_score, precision, recall
 
 
 def learning_rate(global_step):
@@ -82,6 +80,27 @@ def color_image(image, num_classes=20):
     return mycm(norm(image))
 
 
+def save_output(index, training_image, prediction, label):
+    prediction_label = 1 - prediction[0]
+    # Save prediction
+    up_color = color_image(prediction[0], 2)
+    scp.misc.imsave('output/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), up_color)
+    # Merge true positive with training images' green channel
+    true_positive = prediction_label * label[..., 0][0]
+    merge_green = (1 - true_positive) * training_image[..., 1] + true_positive * 255
+    training_image[..., 1] = merge_green
+    # Merge false positive with training images' red channel
+    false_positive = prediction_label * label[..., 1][0]
+    merge_red = (1 - false_positive) * training_image[..., 0] + false_positive * 255
+    training_image[..., 0] = merge_red
+    # Merge false negative with training images' blue channel
+    false_negative = (1 - prediction_label) * label[..., 0][0]
+    merge_blue = (1 - false_negative) * training_image[..., 2] + false_negative * 255
+    training_image[..., 2] = merge_blue
+    # Save images
+    scp.misc.imsave('merge/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), training_image)
+
+
 def main(_):
     kitti_data = kitti.Kitti()
 
@@ -94,10 +113,12 @@ def main(_):
     vgg_fcn.build(x_image, debug=True, num_classes=N_cl)
 
     losses = loss(vgg_fcn.upscore32, y_)
-    f1 = f1_score(vgg_fcn.upscore32, y_)
+    f1, precision, recall = f1_score(vgg_fcn.pred_up, y_)
     total_loss = losses['total_loss']
     tf.summary.scalar("Loss", total_loss)
     tf.summary.scalar("F1 Score", f1)
+    tf.summary.scalar("Precision", precision)
+    tf.summary.scalar("Recall", recall)
 
     global_step = tf.Variable(0, trainable=False)
     lr = learning_rate(global_step)
@@ -110,7 +131,6 @@ def main(_):
 
     train_step = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
-    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.2)
     sess = tf.InteractiveSession()
     merged = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter('train', sess.graph)
@@ -119,15 +139,8 @@ def main(_):
     for i in range(EPOCH):
         print("step %d" % i)
         t_img, t_label = kitti_data.next_batch()
-        if i % 5 == 0:
-            saver.save(sess, './checkpoints/roadseg_model', global_step=i)
-        up_s, summary, _ = sess.run([vgg_fcn.pred_up, merged, train_step], feed_dict={x_image: t_img, y_: t_label})
-        up_color = color_image(up_s[0], 2)
-        scp.misc.imsave('output/decision_%d.png' % (i % UU_TRAIN_SET_SIZE), up_color)
-        merge_decision = t_img[0]
-        merge_green = up_s[0] * merge_decision[..., 1] + (1 - up_s[0]) * 255
-        merge_decision[..., 1] = merge_green
-        scp.misc.imsave('merge/decision_%d.png' % (i % UU_TRAIN_SET_SIZE), merge_decision)
+        pred, summary, _ = sess.run([vgg_fcn.pred_up, merged, train_step], feed_dict={x_image: t_img, y_: t_label})
+        save_output(i, t_img[0], pred, t_label)
         train_writer.add_summary(summary, i)
 
 
