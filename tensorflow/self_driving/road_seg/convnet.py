@@ -1,9 +1,13 @@
 """A full convolutional neural network for road segmentation.
+
+nohup python -u -m self_driving.road_seg.convnet > self_driving/road_seg/output.txt 2>&1 &
+
 """
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import copy
 import tensorflow as tf
 from utils import kitti
 from self_driving.road_seg import fcn8_vgg
@@ -12,7 +16,7 @@ import scipy.misc
 import matplotlib as mpl
 import matplotlib.cm
 
-EPOCH = 1000
+EPOCH = 5000
 N_cl = 2
 UU_TRAIN_SET_SIZE = 98
 
@@ -82,23 +86,24 @@ def color_image(image, num_classes=20):
 
 def save_output(index, training_image, prediction, label):
     prediction_label = 1 - prediction[0]
+    output_image = copy.copy(training_image)
     # Save prediction
     up_color = color_image(prediction[0], 2)
     scp.misc.imsave('output/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), up_color)
     # Merge true positive with training images' green channel
     true_positive = prediction_label * label[..., 0][0]
     merge_green = (1 - true_positive) * training_image[..., 1] + true_positive * 255
-    training_image[..., 1] = merge_green
+    output_image[..., 1] = merge_green
     # Merge false positive with training images' red channel
     false_positive = prediction_label * label[..., 1][0]
     merge_red = (1 - false_positive) * training_image[..., 0] + false_positive * 255
-    training_image[..., 0] = merge_red
+    output_image[..., 0] = merge_red
     # Merge false negative with training images' blue channel
     false_negative = (1 - prediction_label) * label[..., 0][0]
     merge_blue = (1 - false_negative) * training_image[..., 2] + false_negative * 255
-    training_image[..., 2] = merge_blue
+    output_image[..., 2] = merge_blue
     # Save images
-    scp.misc.imsave('merge/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), training_image)
+    scp.misc.imsave('merge/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), output_image)
 
 
 def main(_):
