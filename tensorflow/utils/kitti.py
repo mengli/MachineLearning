@@ -22,7 +22,6 @@ class Kitti(object):
     def __init__(self):
         self._images = []
         self._labels = []
-        self._next_batch_id = 0
         self._file_count = 0
         self._read_datasets()
 
@@ -51,10 +50,8 @@ class Kitti(object):
             self._images.append(x)
             self._labels.append(y)
 
-    def next_batch(self):
-        id = self._next_batch_id
-        self._next_batch_id = (self._next_batch_id + 1) % self._file_count
-        return self._images[id], self._labels[id]
+    def next_batch(self, batch_id):
+        return self._images[batch_id], self._labels[batch_id]
 
 
 def get_training_data(file_name):

@@ -18,7 +18,8 @@ import matplotlib.cm
 
 EPOCH = 5000
 N_cl = 2
-UU_TRAIN_SET_SIZE = 98
+UU_TRAIN_SET_SIZE = 98 - 9
+UU_TEST_SET_SIZE = 9
 
 
 def _compute_cross_entropy_mean(labels, softmax):
@@ -89,7 +90,7 @@ def save_output(index, training_image, prediction, label):
     output_image = copy.copy(training_image)
     # Save prediction
     up_color = color_image(prediction[0], 2)
-    scp.misc.imsave('output/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), up_color)
+    scp.misc.imsave('output/decision_%d.png' % index, up_color)
     # Merge true positive with training images' green channel
     true_positive = prediction_label * label[..., 0][0]
     merge_green = (1 - true_positive) * training_image[..., 1] + true_positive * 255
@@ -103,7 +104,7 @@ def save_output(index, training_image, prediction, label):
     merge_blue = (1 - false_negative) * training_image[..., 2] + false_negative * 255
     output_image[..., 2] = merge_blue
     # Save images
-    scp.misc.imsave('merge/decision_%d.png' % (index % UU_TRAIN_SET_SIZE), output_image)
+    scp.misc.imsave('merge/decision_%d.png' % index, output_image)
 
 
 def main(_):
@@ -143,10 +144,14 @@ def main(_):
 
     for i in range(EPOCH):
         print("step %d" % i)
-        t_img, t_label = kitti_data.next_batch()
-        pred, summary, _ = sess.run([vgg_fcn.pred_up, merged, train_step], feed_dict={x_image: t_img, y_: t_label})
-        save_output(i, t_img[0], pred, t_label)
-        train_writer.add_summary(summary, i)
+        t_img, t_label = kitti_data.next_batch(i % UU_TRAIN_SET_SIZE)
+        pred, _ = sess.run([vgg_fcn.pred_up, train_step], feed_dict={x_image: t_img, y_: t_label})
+        if i % 5 == 0:
+            for test_index in range(UU_TEST_SET_SIZE):
+                test_img, test_label = kitti_data.next_batch(test_index + UU_TRAIN_SET_SIZE)
+                pred, summary = sess.run([vgg_fcn.pred_up, merged], feed_dict={x_image: test_img, y_: test_label})
+                save_output(test_index + UU_TRAIN_SET_SIZE, test_img[0], pred, test_label)
+                train_writer.add_summary(summary, i)
 
 
 if __name__ == '__main__':
