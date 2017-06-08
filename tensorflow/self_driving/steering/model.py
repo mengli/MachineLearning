@@ -9,10 +9,6 @@ from utils import nvida
 # dimensions of our images.
 img_width, img_height = 455, 256
 
-train_data_dir = 'data/train'
-validation_data_dir = 'data/validation'
-nb_train_samples = 2000
-nb_validation_samples = 800
 epochs = 50
 batch_size = 16
 
@@ -21,7 +17,11 @@ if K.image_data_format() == 'channels_first':
 else:
     input_shape = (img_width, img_height, 3)
 
+print('Start')
+
 (x_train, y_train), (x_test, y_test) = nvida.load_data()
+
+print('1')
 
 model = Sequential()
 model.add(Conv2D(filters=24, kernel_size=(5, 5), strides=(2, 2), input_shape=input_shape))
@@ -60,9 +60,13 @@ model.add(Dropout(0.5))
 model.add(Dense(1))
 model.add(Activation('tanh'))
 
+print('2')
+
 model.compile(loss='mean_squared_error',
               optimizer='sgd',
               metrics=['accuracy'])
+
+print('3')
 
 # this is the augmentation configuration we will use for training
 image_datagen = ImageDataGenerator(rescale=1. / 255)
@@ -70,6 +74,8 @@ image_datagen = ImageDataGenerator(rescale=1. / 255)
 # fits the model on batches with real-time data augmentation:
 model.fit_generator(image_datagen.flow(x_train, y_train, batch_size=batch_size),
                     steps_per_epoch=len(x_train) / batch_size, epochs=epochs)
+
+print('4')
 
 for e in range(epochs):
     print('Epoch %d' % e)

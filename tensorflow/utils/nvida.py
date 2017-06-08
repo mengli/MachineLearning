@@ -6,31 +6,31 @@ from keras.preprocessing import image
 # dimensions of our images.
 img_width, img_height = 455, 256
 
-train_samples_dir = '../train_data/'
-test_samples_dir = '../test_data/'
+train_samples_dir = '/Users/limeng/git/MachineLearning/tensorflow/train_data/'
+test_samples_dir = '/Users/limeng/git/MachineLearning/tensorflow/test_data'
 
-train_label = '../train_data/train_data_label.txt'
-test_label = '../test_data/test_data_label.txt'
+train_label = '/Users/limeng/git/MachineLearning/tensorflow/train_data/train_data_label.txt'
+test_label = '/Users/limeng/git/MachineLearning/tensorflow/test_data/test_data_label.txt'
 
 num_train_samples = 40000
 num_test_samples = 5406
 
 
 def load_data():
-    x_train = load_image_set(num_train_samples, train_samples_dir)
+    x_train = load_image_set(num_train_samples, train_samples_dir, 0)
     y_train = load_label_set(num_train_samples, train_label)
 
-    x_test = load_image_set(num_test_samples, test_samples_dir)
+    x_test = load_image_set(num_test_samples, test_samples_dir, num_train_samples)
     y_test = load_label_set(num_test_samples, test_label)
 
     return (x_train, y_train), (x_test, y_test)
 
 
-def load_image_set(image_set_size, image_set_dir):
+def load_image_set(image_set_size, image_set_dir, base):
     img_set = np.zeros((image_set_size, img_width, img_height, 3), dtype='uint8')
 
     for i in range(0, image_set_size):
-        img_path = os.path.join(image_set_dir, str('%d.jpg' % i))
+        img_path = os.path.join(image_set_dir, str('%d.jpg' % (i + base)))
         if os.path.isfile(img_path):
             img = image.load_img(img_path, target_size=(img_width, img_height))
             img_set[i, :, :, :] = image.img_to_array(img)
@@ -56,12 +56,12 @@ def load_label_set(label_set_size, label_set_dir):
 
 def main():
     (x_train, y_train), (x_test, y_test) = load_data()
-    print x_train.shape
-    print y_train.shape
-    print y_train
-    print x_test.shape
-    print y_test.shape
-    print y_test
+    #print x_train.shape
+    #print y_train.shape
+    #print x_train
+    #print x_test.shape
+    #print y_test.shape
+    print x_test
 
 
 if __name__ == '__main__':
