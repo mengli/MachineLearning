@@ -55,13 +55,7 @@ def load_label_set(label_set_size, label_set_dir):
 
 
 def main():
-    (x_train, y_train), (x_test, y_test) = load_data()
-    #print x_train.shape
-    #print y_train.shape
-    #print x_train
-    #print x_test.shape
-    #print y_test.shape
-    print x_test
+    pass
 
 
 if __name__ == '__main__':

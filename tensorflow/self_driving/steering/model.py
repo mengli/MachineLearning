@@ -17,11 +17,7 @@ if K.image_data_format() == 'channels_first':
 else:
     input_shape = (img_width, img_height, 3)
 
-print('Start')
-
 (x_train, y_train), (x_test, y_test) = nvida.load_data()
-
-print('1')
 
 model = Sequential()
 model.add(Conv2D(filters=24, kernel_size=(5, 5), strides=(2, 2), input_shape=input_shape))
@@ -60,32 +56,17 @@ model.add(Dropout(0.5))
 model.add(Dense(1))
 model.add(Activation('tanh'))
 
-print('2')
-
 model.compile(loss='mean_squared_error',
               optimizer='sgd',
               metrics=['accuracy'])
-
-print('3')
 
 # this is the augmentation configuration we will use for training
 image_datagen = ImageDataGenerator(rescale=1. / 255)
 
 # fits the model on batches with real-time data augmentation:
 model.fit_generator(image_datagen.flow(x_train, y_train, batch_size=batch_size),
-                    steps_per_epoch=len(x_train) / batch_size, epochs=epochs)
-
-print('4')
-
-for e in range(epochs):
-    print('Epoch %d' % e)
-    batches = 0
-    for x_batch, y_batch in image_datagen.flow(x_train, y_train, batch_size=batch_size):
-        model.fit(x_batch, y_batch)
-        batches += 1
-        if batches >= len(x_train) / batch_size:
-            # we need to break the loop by hand because
-            # the generator loops indefinitely
-            break
+                    steps_per_epoch=len(x_train) // batch_size, epochs=epochs,
+                    validation_data=image_datagen.flow(x_test, y_test, batch_size=batch_size),
+                    validation_steps=len(x_test) // batch_size)
 
 model.save_weights('first_try.h5')
