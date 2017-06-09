@@ -1,5 +1,6 @@
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import Sequential
+from keras.optimizers import SGD
 from keras.layers import Conv2D
 from keras.layers import Activation, Dropout, Flatten, Dense
 from keras import backend as K
@@ -29,7 +30,7 @@ model.add(Activation('relu'))
 model.add(Conv2D(filters=48, kernel_size=(5, 5), strides=(2, 2)))
 model.add(Activation('relu'))
 
-model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(2, 2)))
+model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1)))
 model.add(Activation('relu'))
 
 model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1)))
@@ -39,25 +40,25 @@ model.add(Flatten())
 
 model.add(Dense(1164))
 model.add(Activation('relu'))
-model.add(Dropout(0.5))
+model.add(Dropout(0.8))
 
 model.add(Dense(100))
 model.add(Activation('relu'))
-model.add(Dropout(0.5))
+model.add(Dropout(0.8))
 
 model.add(Dense(50))
 model.add(Activation('relu'))
-model.add(Dropout(0.5))
+model.add(Dropout(0.8))
 
 model.add(Dense(10))
 model.add(Activation('relu'))
-model.add(Dropout(0.5))
+model.add(Dropout(0.8))
 
 model.add(Dense(1))
 model.add(Activation('tanh'))
 
 model.compile(loss='mean_squared_error',
-              optimizer='sgd',
+              optimizer=SGD(lr=0.0001),
               metrics=['accuracy'])
 
 # this is the augmentation configuration we will use for training
