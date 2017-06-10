@@ -1,73 +1,87 @@
-from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential
-from keras.optimizers import SGD
-from keras.layers import Conv2D
-from keras.layers import Activation, Dropout, Flatten, Dense
-from keras import backend as K
-from utils import nvida
+import tensorflow as tf
 
+def weight_variable(shape):
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.Variable(initial)
 
-# dimensions of our images.
-img_width, img_height = 455, 256
+def bias_variable(shape):
+    initial = tf.constant(0.1, shape=shape)
+    return tf.Variable(initial)
 
-epochs = 50
-batch_size = 16
+def conv2d(x, W, stride):
+    return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding='VALID')
 
-if K.image_data_format() == 'channels_first':
-    input_shape = (3, img_width, img_height)
-else:
-    input_shape = (img_width, img_height, 3)
+x = tf.placeholder(tf.float32, shape=[None, 66, 200, 3])
+y_ = tf.placeholder(tf.float32, shape=[None, 1])
 
-(x_train, y_train), (x_test, y_test) = nvida.load_data()
+x_image = x
 
-model = Sequential()
-model.add(Conv2D(filters=24, kernel_size=(5, 5), strides=(2, 2), input_shape=input_shape))
-model.add(Activation('relu'))
+#first convolutional layer
+W_conv1 = weight_variable([5, 5, 3, 24])
+b_conv1 = bias_variable([24])
 
-model.add(Conv2D(filters=36, kernel_size=(5, 5), strides=(2, 2)))
-model.add(Activation('relu'))
+h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1, 2) + b_conv1)
 
-model.add(Conv2D(filters=48, kernel_size=(5, 5), strides=(2, 2)))
-model.add(Activation('relu'))
+#second convolutional layer
+W_conv2 = weight_variable([5, 5, 24, 36])
+b_conv2 = bias_variable([36])
 
-model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1)))
-model.add(Activation('relu'))
+h_conv2 = tf.nn.relu(conv2d(h_conv1, W_conv2, 2) + b_conv2)
 
-model.add(Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1)))
-model.add(Activation('relu'))
+#third convolutional layer
+W_conv3 = weight_variable([5, 5, 36, 48])
+b_conv3 = bias_variable([48])
 
-model.add(Flatten())
+h_conv3 = tf.nn.relu(conv2d(h_conv2, W_conv3, 2) + b_conv3)
 
-model.add(Dense(1164))
-model.add(Activation('relu'))
-model.add(Dropout(0.8))
+#fourth convolutional layer
+W_conv4 = weight_variable([3, 3, 48, 64])
+b_conv4 = bias_variable([64])
 
-model.add(Dense(100))
-model.add(Activation('relu'))
-model.add(Dropout(0.8))
+h_conv4 = tf.nn.relu(conv2d(h_conv3, W_conv4, 1) + b_conv4)
 
-model.add(Dense(50))
-model.add(Activation('relu'))
-model.add(Dropout(0.8))
+#fifth convolutional layer
+W_conv5 = weight_variable([3, 3, 64, 64])
+b_conv5 = bias_variable([64])
 
-model.add(Dense(10))
-model.add(Activation('relu'))
-model.add(Dropout(0.8))
+h_conv5 = tf.nn.relu(conv2d(h_conv4, W_conv5, 1) + b_conv5)
 
-model.add(Dense(1))
-model.add(Activation('tanh'))
+#FCL 1
+W_fc1 = weight_variable([1152, 1164])
+b_fc1 = bias_variable([1164])
 
-model.compile(loss='mean_squared_error',
-              optimizer=SGD(lr=0.0001),
-              metrics=['accuracy'])
+h_conv5_flat = tf.reshape(h_conv5, [-1, 1152])
+h_fc1 = tf.nn.relu(tf.matmul(h_conv5_flat, W_fc1) + b_fc1)
 
-# this is the augmentation configuration we will use for training
-image_datagen = ImageDataGenerator(rescale=1. / 255)
+keep_prob = tf.placeholder(tf.float32)
+h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-# fits the model on batches with real-time data augmentation:
-model.fit_generator(image_datagen.flow(x_train, y_train, batch_size=batch_size),
-                    steps_per_epoch=len(x_train) // batch_size, epochs=epochs,
-                    validation_data=image_datagen.flow(x_test, y_test, batch_size=batch_size),
-                    validation_steps=len(x_test) // batch_size)
+#FCL 2
+W_fc2 = weight_variable([1164, 100])
+b_fc2 = bias_variable([100])
 
-model.save_weights('first_try.h5')
+h_fc2 = tf.nn.relu(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+
+h_fc2_drop = tf.nn.dropout(h_fc2, keep_prob)
+
+#FCL 3
+W_fc3 = weight_variable([100, 50])
+b_fc3 = bias_variable([50])
+
+h_fc3 = tf.nn.relu(tf.matmul(h_fc2_drop, W_fc3) + b_fc3)
+
+h_fc3_drop = tf.nn.dropout(h_fc3, keep_prob)
+
+#FCL 3
+W_fc4 = weight_variable([50, 10])
+b_fc4 = bias_variable([10])
+
+h_fc4 = tf.nn.relu(tf.matmul(h_fc3_drop, W_fc4) + b_fc4)
+
+h_fc4_drop = tf.nn.dropout(h_fc4, keep_prob)
+
+#Output
+W_fc5 = weight_variable([10, 1])
+b_fc5 = bias_variable([1])
+
+y = tf.multiply(tf.atan(tf.matmul(h_fc4_drop, W_fc5) + b_fc5), 2) #scale the atan output
