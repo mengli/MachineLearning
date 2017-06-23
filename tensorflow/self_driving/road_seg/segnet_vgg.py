@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
 
 VGG_MEAN = [103.939, 116.779, 123.68]
 VGG16_NPY_PATH = 'vgg16.npy'
@@ -95,10 +94,13 @@ def max_pool_with_argmax(bottom):
         _, indices = tf.nn.max_pool_with_argmax(
             bottom,
             ksize=[1, 2, 2, 1],
-            strides=[1, 2, 2, 1],
-            padding='SAME')
+            strides=[1, 1, 1, 1],
+            padding='VALID')
         indices = tf.stop_gradient(indices)
-        bottom = slim.max_pool2d(bottom, kernel_size=[2, 2],  stride=2)
+        bottom = tf.nn.max_pool(bottom,
+                                ksize=[1, 2, 2, 1],
+                                strides=[1, 1, 1, 1],
+                                padding='VALID')
         return bottom, indices
 
 
@@ -128,32 +130,34 @@ def max_unpool_with_argmax(bottom, mask):
         ret = tf.scatter_nd(indices, values, output_shape)
         return ret
 
+def get_model():
+    conv1_1 = conv_layer_with_bn(x_, is_training_, "conv1_1")
+    conv1_2 = conv_layer_with_bn(conv1_1, is_training_, "conv1_2")
+    pool1, pool1_indices = max_pool_with_argmax(conv1_2, 'pool1')
 
-conv1_1 = conv_layer_with_bn(x_, is_training_, "conv1_1")
-conv1_2 = conv_layer_with_bn(conv1_1, is_training_, "conv1_2")
-pool1, pool1_indices = max_pool_with_argmax(conv1_2, 'pool1')
+    conv2_1 = conv_layer_with_bn(pool1, "conv2_1")
+    conv2_2 = conv_layer_with_bn(conv2_1, "conv2_2")
+    pool2, pool2_indices = max_pool_with_argmax(conv2_2, 'pool2')
 
-conv2_1 = conv_layer_with_bn(pool1, "conv2_1")
-conv2_2 = conv_layer_with_bn(conv2_1, "conv2_2")
-pool2, pool2_indices = max_pool_with_argmax(conv2_2, 'pool2')
+    conv3_1 = conv_layer_with_bn(pool2, "conv3_1")
+    conv3_2 = conv_layer_with_bn(conv3_1, "conv3_2")
+    conv3_3 = conv_layer_with_bn(conv3_2, "conv3_3")
+    pool3, pool3_indices = max_pool_with_argmax(conv3_3, 'pool3')
 
-conv3_1 = conv_layer_with_bn(pool2, "conv3_1")
-conv3_2 = conv_layer_with_bn(conv3_1, "conv3_2")
-conv3_3 = conv_layer_with_bn(conv3_2, "conv3_3")
-pool3, pool3_indices = max_pool_with_argmax(conv3_3, 'pool3')
+    conv4_1 = conv_layer_with_bn(pool3, "conv4_1")
+    conv4_2 = conv_layer_with_bn(conv4_1, "conv4_2")
+    conv4_3 = conv_layer_with_bn(conv4_2, "conv4_3")
+    pool4, pool4_indices = max_pool_with_argmax(conv4_3, 'pool4')
 
-conv4_1 = conv_layer_with_bn(pool3, "conv4_1")
-conv4_2 = conv_layer_with_bn(conv4_1, "conv4_2")
-conv4_3 = conv_layer_with_bn(conv4_2, "conv4_3")
-pool4, pool4_indices = max_pool_with_argmax(conv4_3, 'pool4')
+    conv5_1 = conv_layer_with_bn(pool4, "conv5_1")
+    conv5_2 = conv_layer_with_bn(conv5_1, "conv5_2")
+    conv5_3 = conv_layer_with_bn(conv5_2, "conv5_3")
+    pool5, pool5_indices = max_pool_with_argmax(conv5_3, 'pool5')
 
-conv5_1 = conv_layer_with_bn(pool4, "conv5_1")
-conv5_2 = conv_layer_with_bn(conv5_1, "conv5_2")
-conv5_3 = conv_layer_with_bn(conv5_2, "conv5_3")
-pool5, pool5_indices = max_pool_with_argmax(conv5_3, 'pool5')
+    # End of encoders
+    # start of decoders
 
-# End of encoders
-# start of decoders
+    upsample5 = max_unpool_with_argmax(pool5, pool5_indices)
 
-upsample5 = max_unpool_with_argmax(pool5, pool5_indices)
+    return upsample5
 
