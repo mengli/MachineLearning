@@ -34,7 +34,8 @@ val_ys = ys[-int(len(xs) * 0.2):]
 num_train_images = len(train_xs)
 num_val_images = len(val_xs)
 
-def LoadTrainBatch(batch_size):
+
+def load_train_batch(batch_size):
     global train_batch_pointer
     x_out = []
     y_out = []
@@ -44,7 +45,8 @@ def LoadTrainBatch(batch_size):
     train_batch_pointer += batch_size
     return x_out, y_out
 
-def LoadValBatch(batch_size):
+
+def load_val_batch(batch_size):
     global val_batch_pointer
     x_out = []
     y_out = []
