@@ -94,25 +94,26 @@ def max_pool_with_argmax(bottom):
         _, indices = tf.nn.max_pool_with_argmax(
             bottom,
             ksize=[1, 2, 2, 1],
-            strides=[1, 1, 1, 1],
-            padding='VALID')
+            strides=[1, 2, 2, 1],
+            padding='SAME')
         indices = tf.stop_gradient(indices)
         bottom = tf.nn.max_pool(bottom,
                                 ksize=[1, 2, 2, 1],
-                                strides=[1, 1, 1, 1],
-                                padding='VALID')
+                                strides=[1, 2, 2, 1],
+                                padding='SAME')
         return bottom, indices
 
 
-def max_unpool_with_argmax(bottom, mask):
+def max_unpool_with_argmax(bottom, mask, output_shape=None):
     with tf.name_scope('max_unpool_with_argmax'):
         ksize = [1, 2, 2, 1]
         input_shape = bottom.get_shape().as_list()
-        # calculation new shape
-        output_shape = (input_shape[0],
-                        input_shape[1] * ksize[1],
-                        input_shape[2] * ksize[2],
-                        input_shape[3])
+        #  calculation new shape
+        if output_shape is None:
+            output_shape = (input_shape[0],
+                            input_shape[1] * ksize[1],
+                            input_shape[2] * ksize[2],
+                            input_shape[3])
         # calculation indices for batch, height, width and feature maps
         one_like_mask = tf.ones_like(mask)
         batch_range = tf.reshape(tf.range(output_shape[0],
@@ -127,8 +128,8 @@ def max_unpool_with_argmax(bottom, mask):
         updates_size = tf.size(bottom)
         indices = tf.transpose(tf.reshape(tf.stack([b, y, x, f]), [4, updates_size]))
         values = tf.reshape(bottom, [updates_size])
-        ret = tf.scatter_nd(indices, values, output_shape)
-        return ret
+        return tf.scatter_nd(indices, values, output_shape)[0]
+
 
 def get_model():
     conv1_1 = conv_layer_with_bn(x_, is_training_, "conv1_1")
