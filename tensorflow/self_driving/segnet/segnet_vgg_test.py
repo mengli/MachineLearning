@@ -4,6 +4,7 @@ from __future__ import print_function
 
 from tensorflow.python.framework import constant_op
 from tensorflow.python.platform import test
+import tensorflow as tf
 
 import segnet_vgg
 
@@ -64,6 +65,20 @@ class PoolingTest(test.TestCase):
                                        [[  0.,   0.],
                                         [ 15.,  16.],
                                         [ 17.,  18.]]]])
+
+    def testGetBias(self):
+        with self.test_session(use_gpu=True) as sess:
+            bias = segnet_vgg.get_bias("conv1_1")
+            sess.run(tf.global_variables_initializer())
+            self.assertEqual(bias.get_shape(), [64,])
+            self.assertAllClose(tf.reduce_sum(bias).eval(), 32.08903503417969)
+
+    def testGetConvFilter(self):
+        with self.test_session(use_gpu=True) as sess:
+            weight = segnet_vgg.get_conv_filter("conv1_1")
+            sess.run(tf.global_variables_initializer())
+            self.assertEqual(weight.get_shape(), [3, 3, 3, 64])
+            self.assertAllClose(tf.reduce_sum(weight).eval(), -4.212705612182617)
 
 
 if __name__ == "__main__":
