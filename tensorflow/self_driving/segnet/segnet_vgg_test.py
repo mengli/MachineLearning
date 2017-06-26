@@ -5,6 +5,7 @@ from __future__ import print_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.platform import test
 import tensorflow as tf
+import numpy as np
 
 import segnet_vgg
 
@@ -56,15 +57,15 @@ class PoolingTest(test.TestCase):
             out_op, argmax_op = segnet_vgg.max_pool_with_argmax(t)
             out_op = segnet_vgg.max_unpool_with_argmax(out_op, argmax_op, [1, 3, 3, 2])
             out = sess.run([out_op])
-            self.assertAllClose(out, [[[[  0.,   0.],
-                                        [  0.,   0.],
-                                        [  0.,   0.]],
-                                       [[  0.,   0.],
-                                        [  9.,  10.],
-                                        [ 11.,  12.]],
-                                       [[  0.,   0.],
-                                        [ 15.,  16.],
-                                        [ 17.,  18.]]]])
+            self.assertAllClose(out, [[[[[  0.,   0.],
+                                         [  0.,   0.],
+                                         [  0.,   0.]],
+                                        [[  0.,   0.],
+                                         [  9.,  10.],
+                                         [ 11.,  12.]],
+                                        [[  0.,   0.],
+                                         [ 15.,  16.],
+                                         [ 17.,  18.]]]]])
 
     def testGetBias(self):
         with self.test_session(use_gpu=True) as sess:
@@ -79,6 +80,14 @@ class PoolingTest(test.TestCase):
             sess.run(tf.global_variables_initializer())
             self.assertEqual(weight.get_shape(), [3, 3, 3, 64])
             self.assertAllClose(tf.reduce_sum(weight).eval(), -4.212705612182617)
+
+    def testConvLayerWithBn(self):
+        tensor_input = tf.ones([10, 495, 289, 3], tf.float32)
+        with self.test_session(use_gpu=False) as sess:
+            conv_op = segnet_vgg.conv_layer_with_bn(tensor_input, True, "conv1_1")
+            sess.run(tf.global_variables_initializer())
+            conv_out = sess.run([conv_op])
+            self.assertEqual(np.array(conv_out).shape, (1, 10, 495, 289, 64))
 
 
 if __name__ == "__main__":

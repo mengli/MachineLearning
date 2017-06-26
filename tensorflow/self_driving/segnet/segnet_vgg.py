@@ -47,20 +47,24 @@ def get_conv_filter(name):
     return var
 
 
-def create_conv_filter(shape):
-    init = tf.truncated_normal(shape, stddev=0.1)
-    var = tf.get_variable(name="weight", initializer=init, shape=shape)
-    if not tf.get_variable_scope().reuse:
-        weight_decay = tf.multiply(tf.nn.l2_loss(var), WD, name='weight_loss')
-        tf.add_to_collection('losses', weight_decay)
-    variable_summaries(var)
-    return var
+def get_deconv_filter(f_shape):
+    width = f_shape[0]
+    heigh = f_shape[0]
+    f = ceil(width / 2.0)
+    c = (2 * f - 1 - f % 2) / (2.0 * f)
+    bilinear = np.zeros([f_shape[0], f_shape[1]])
+    for x in range(width):
+        for y in range(heigh):
+            value = (1 - abs(x / f - c)) * (1 - abs(y / f - c))
+            bilinear[x, y] = value
+    weights = np.zeros(f_shape)
+    for i in range(f_shape[2]):
+        weights[:, :, i, i] = bilinear
 
-
-def create_bias(shape):
-    init = tf.constant(0.1, shape=shape)
-    var = tf.get_variable(name="biases", initializer=init, shape=shape)
-    variable_summaries(var)
+    init = tf.constant_initializer(value=weights,
+                                   dtype=tf.float32)
+    var = tf.get_variable(name="up_filter", initializer=init,
+                          shape=weights.shape)
     return var
 
 
@@ -69,6 +73,13 @@ def get_bias(name):
     shape = data_dict[name][1].shape
     init = tf.constant_initializer(value=bias_wights,
                                    dtype=tf.float32)
+    var = tf.get_variable(name="biases", initializer=init, shape=shape)
+    variable_summaries(var)
+    return var
+
+
+def get_deconv_bias(shape):
+    init = tf.constant(0.1, shape=shape)
     var = tf.get_variable(name="biases", initializer=init, shape=shape)
     variable_summaries(var)
     return var
@@ -84,7 +95,7 @@ def batch_norm_layer(bottom, is_training, scope):
                                         center=True,
                                         scale=True,
                                         scope=scope+"_bn",
-                                        reuse=is_training)
+                                        reuse=(not is_training))
 
 
 def conv_layer_with_bn(bottom, is_training, name=None):
@@ -97,10 +108,10 @@ def conv_layer_with_bn(bottom, is_training, name=None):
     return conv
 
 
-def conv_layer_with_bn(bottom, shape, is_training, name=None):
+def deconv_layer_with_bn(bottom, shape, is_training, name=None):
     with tf.variable_scope(name) as scope:
-        weight = create_conv_filter(shape=shape)
-        bias = create_bias(shape=shape[3])
+        weight = get_deconv_filter(shape=shape)
+        bias = get_deconv_bias(shape=shape[3])
         conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
         conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
     activation_summary(conv)
@@ -146,7 +157,7 @@ def max_unpool_with_argmax(bottom, mask, output_shape=None):
         updates_size = tf.size(bottom)
         indices = tf.transpose(tf.reshape(tf.stack([b, y, x, f]), [4, updates_size]))
         values = tf.reshape(bottom, [updates_size])
-        return tf.scatter_nd(indices, values, output_shape)[0]
+        return tf.scatter_nd(indices, values, output_shape)
 
 
 def get_model():
