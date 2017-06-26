@@ -23,7 +23,8 @@ UU_TEST_SET_SIZE = 9
 
 
 def _compute_cross_entropy_mean(labels, softmax):
-    cross_entropy = -tf.reduce_sum(tf.multiply(labels * tf.log(softmax), [1, 1]), reduction_indices=[1])
+    cross_entropy = -tf.reduce_sum(
+        tf.multiply(labels * tf.log(softmax), [1, 1]), reduction_indices=[1])
     cross_entropy_mean = tf.reduce_mean(cross_entropy, name='xentropy_mean')
     return cross_entropy_mean
 
@@ -145,11 +146,13 @@ def main(_):
     for i in range(EPOCH):
         print("step %d" % i)
         t_img, t_label = kitti_data.next_batch(i % UU_TRAIN_SET_SIZE)
-        pred, _ = sess.run([vgg_fcn.pred_up, train_step], feed_dict={x_image: t_img, y_: t_label})
+        pred, _ = sess.run([vgg_fcn.pred_up, train_step],
+                           feed_dict={x_image: t_img, y_: t_label})
         if i % 5 == 0:
             for test_index in range(UU_TEST_SET_SIZE):
                 test_img, test_label = kitti_data.next_batch(test_index + UU_TRAIN_SET_SIZE)
-                pred, summary = sess.run([vgg_fcn.pred_up, merged], feed_dict={x_image: test_img, y_: test_label})
+                pred, summary = sess.run([vgg_fcn.pred_up, merged],
+                                         feed_dict={x_image: test_img, y_: test_label})
                 save_output(test_index + UU_TRAIN_SET_SIZE, test_img[0], pred, test_label)
                 train_writer.add_summary(summary, i)
 

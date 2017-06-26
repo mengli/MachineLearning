@@ -5,14 +5,13 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 
-VGG_MEAN = [103.939, 116.779, 123.68]
 VGG16_NPY_PATH = 'vgg16.npy'
 K = 10
 WD = 5e-4
 
 data_dict = np.load(VGG16_NPY_PATH, encoding='latin1').item()
-x_ = tf.placeholder(tf.float32, shape=[None, 66, 200, 3])
-y_ = tf.placeholder(tf.float32, shape=[None, K])
+x_ = tf.placeholder(tf.float32, shape=[1, None, None, 3])
+y_ = tf.placeholder(tf.float32, shape=[1, None, None, K])
 is_training_ = tf.placeholder(tf.bool, name='is_training')
 
 
@@ -48,6 +47,23 @@ def get_conv_filter(name):
     return var
 
 
+def create_conv_filter(shape):
+    init = tf.truncated_normal(shape, stddev=0.1)
+    var = tf.get_variable(name="weight", initializer=init, shape=shape)
+    if not tf.get_variable_scope().reuse:
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), WD, name='weight_loss')
+        tf.add_to_collection('losses', weight_decay)
+    variable_summaries(var)
+    return var
+
+
+def create_bias(shape):
+    init = tf.constant(0.1, shape=shape)
+    var = tf.get_variable(name="biases", initializer=init, shape=shape)
+    variable_summaries(var)
+    return var
+
+
 def get_bias(name):
     bias_wights = data_dict[name][1]
     shape = data_dict[name][1].shape
@@ -71,14 +87,22 @@ def batch_norm_layer(bottom, is_training, scope):
                                         reuse=is_training)
 
 
-def conv_layer_with_bn(bottom, is_training, activation=True, name=None):
+def conv_layer_with_bn(bottom, is_training, name=None):
     with tf.variable_scope(name) as scope:
         weight = get_conv_filter(name)
         bias = get_bias(name)
         conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
-        conv = tf.cond(activation,
-                       lambda: tf.nn.relu(batch_norm_layer(conv, is_training, scope.name)),
-                       lambda: batch_norm_layer(conv, is_training, scope.name))
+        conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
+    activation_summary(conv)
+    return conv
+
+
+def conv_layer_with_bn(bottom, shape, is_training, name=None):
+    with tf.variable_scope(name) as scope:
+        weight = create_conv_filter(shape=shape)
+        bias = create_bias(shape=shape[3])
+        conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
+        conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
     activation_summary(conv)
     return conv
 
@@ -152,7 +176,37 @@ def get_model():
     # End of encoders
     # start of decoders
 
-    upsample5 = max_unpool_with_argmax(pool5, pool5_indices)
+    up_sample_5 = max_unpool_with_argmax(pool5,
+                                         pool5_indices,
+                                         output_shape=tf.shape(conv5_3))
+    up_conv5_1 = conv_layer_with_bn(up_sample_5, "up_conv5_1", shape=[3, 3, 512, 512])
+    up_conv5_2 = conv_layer_with_bn(up_conv5_1, "up_conv5_2", shape=[3, 3, 512, 512])
+    up_conv5_3 = conv_layer_with_bn(up_conv5_2, "up_conv5_3", shape=[3, 3, 512, 512])
 
-    return upsample5
+    up_sample_4 = max_unpool_with_argmax(up_conv5_3,
+                                         pool4_indices,
+                                         output_shape=tf.shape(conv4_3))
+    up_conv4_1 = conv_layer_with_bn(up_sample_4, "up_conv4_1", shape=[3, 3, 512, 512])
+    up_conv4_2 = conv_layer_with_bn(up_conv4_1, "up_conv4_2", shape=[3, 3, 512, 512])
+    up_conv4_3 = conv_layer_with_bn(up_conv4_2, "up_conv4_3", shape=[3, 3, 512, 512])
 
+    up_sample_3 = max_unpool_with_argmax(up_conv4_3,
+                                         pool3_indices,
+                                         output_shape=tf.shape(conv3_3))
+    up_conv3_1 = conv_layer_with_bn(up_sample_3, "up_conv3_1", shape=[3, 3, 512, 256])
+    up_conv3_2 = conv_layer_with_bn(up_conv3_1, "up_conv3_2", shape=[3, 3, 256, 256])
+    up_conv3_3 = conv_layer_with_bn(up_conv3_2, "up_conv3_3", shape=[3, 3, 256, 256])
+
+    up_sample_2 = max_unpool_with_argmax(up_conv3_3,
+                                         pool2_indices,
+                                         output_shape=tf.shape(conv2_2))
+    up_conv2_1 = conv_layer_with_bn(up_sample_2, "up_conv2_1", shape=[3, 3, 256, 128])
+    up_conv2_2 = conv_layer_with_bn(up_conv2_1, "up_conv2_2", shape=[3, 3, 128, 128])
+
+    up_sample_1 = max_unpool_with_argmax(up_conv2_2,
+                                         pool1_indices,
+                                         output_shape=tf.shape(conv1_2))
+    up_conv1_1 = conv_layer_with_bn(up_sample_1, "up_conv1_1", shape=[3, 3, 128, 64])
+    up_conv1_2 = conv_layer_with_bn(up_conv1_1, "up_conv1_2", shape=[3, 3, 64, K])
+
+    return up_conv1_2
