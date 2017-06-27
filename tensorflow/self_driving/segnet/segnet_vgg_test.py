@@ -82,8 +82,10 @@ class PoolingTest(test.TestCase):
             self.assertAllClose(tf.reduce_sum(weight).eval(), -4.212705612182617)
 
     def testConvLayerWithBn(self):
+        config = tf.ConfigProto()
+        config.gpu_options.allocator_type = 'BFC'
         tensor_input = tf.ones([10, 495, 289, 3], tf.float32)
-        with self.test_session(use_gpu=False) as sess:
+        with self.test_session(use_gpu=True, config = config) as sess:
             conv_op = segnet_vgg.conv_layer_with_bn(tensor_input, True, "conv1_1")
             sess.run(tf.global_variables_initializer())
             conv_out = sess.run([conv_op])

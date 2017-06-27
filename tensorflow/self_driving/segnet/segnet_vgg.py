@@ -92,8 +92,8 @@ def conv2d(bottom, weight):
 def batch_norm_layer(bottom, is_training, scope):
     return tf.contrib.layers.batch_norm(bottom,
                                         is_training=is_training,
-                                        center=True,
-                                        scale=True,
+                                        center=False,
+                                        updates_collections=None,
                                         scope=scope+"_bn",
                                         reuse=(not is_training))
 

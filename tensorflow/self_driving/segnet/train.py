@@ -9,7 +9,9 @@ N_cl = 2
 UU_TRAIN_SET_SIZE = 98 - 9
 UU_TEST_SET_SIZE = 9
 
-sess = tf.InteractiveSession()
+config = tf.ConfigProto()
+config.gpu_options.allocator_type = 'BFC'
+sess = tf.InteractiveSession(config = config)
 
 kitti_data = kitti.Kitti()
 
