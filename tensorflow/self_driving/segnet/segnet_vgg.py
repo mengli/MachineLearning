@@ -48,23 +48,8 @@ def get_conv_filter(name):
 
 
 def get_deconv_filter(f_shape):
-    width = f_shape[0]
-    heigh = f_shape[0]
-    f = ceil(width / 2.0)
-    c = (2 * f - 1 - f % 2) / (2.0 * f)
-    bilinear = np.zeros([f_shape[0], f_shape[1]])
-    for x in range(width):
-        for y in range(heigh):
-            value = (1 - abs(x / f - c)) * (1 - abs(y / f - c))
-            bilinear[x, y] = value
-    weights = np.zeros(f_shape)
-    for i in range(f_shape[2]):
-        weights[:, :, i, i] = bilinear
-
-    init = tf.constant_initializer(value=weights,
-                                   dtype=tf.float32)
-    var = tf.get_variable(name="up_filter", initializer=init,
-                          shape=weights.shape)
+    init = tf.truncated_normal(f_shape, stddev=0.05, dtype=tf.float32)
+    var = tf.get_variable(name="up_filter", initializer=init)
     return var
 
 
@@ -80,7 +65,7 @@ def get_bias(name):
 
 def get_deconv_bias(shape):
     init = tf.constant(0.1, shape=shape)
-    var = tf.get_variable(name="biases", initializer=init, shape=shape)
+    var = tf.get_variable(name="biases", initializer=init)
     variable_summaries(var)
     return var
 
@@ -90,12 +75,19 @@ def conv2d(bottom, weight):
 
 
 def batch_norm_layer(bottom, is_training, scope):
-    return tf.contrib.layers.batch_norm(bottom,
-                                        is_training=is_training,
-                                        center=False,
-                                        updates_collections=None,
-                                        scope=scope+"_bn",
-                                        reuse=(not is_training))
+    return tf.cond(is_training,
+                   lambda: tf.contrib.layers.batch_norm(bottom,
+                                                        is_training=True,
+                                                        center=False,
+                                                        updates_collections=None,
+                                                        scope=scope+"_bn",
+                                                        reuse=False),
+                   lambda: tf.contrib.layers.batch_norm(bottom,
+                                                        is_training=False,
+                                                        center=False,
+                                                        updates_collections=None,
+                                                        scope=scope+"_bn",
+                                                        reuse=True))
 
 
 def conv_layer_with_bn(bottom, is_training, name=None):
@@ -110,8 +102,8 @@ def conv_layer_with_bn(bottom, is_training, name=None):
 
 def deconv_layer_with_bn(bottom, shape, is_training, name=None):
     with tf.variable_scope(name) as scope:
-        weight = get_deconv_filter(shape=shape)
-        bias = get_deconv_bias(shape=shape[3])
+        weight = get_deconv_filter(shape)
+        bias = get_deconv_bias([shape[3]])
         conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
         conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
     activation_summary(conv)
@@ -161,63 +153,97 @@ def max_unpool_with_argmax(bottom, mask, output_shape=None):
 
 
 def get_model():
-    conv1_1 = conv_layer_with_bn(x_, is_training_, "conv1_1")
-    conv1_2 = conv_layer_with_bn(conv1_1, is_training_, "conv1_2")
-    pool1, pool1_indices = max_pool_with_argmax(conv1_2, 'pool1')
+    is_training = tf.equal(is_training_, tf.constant(True))
+    conv1_1 = conv_layer_with_bn(x_, is_training, "conv1_1")
+    conv1_2 = conv_layer_with_bn(conv1_1, is_training, "conv1_2")
+    pool1, pool1_indices = max_pool_with_argmax(conv1_2)
 
-    conv2_1 = conv_layer_with_bn(pool1, "conv2_1")
-    conv2_2 = conv_layer_with_bn(conv2_1, "conv2_2")
-    pool2, pool2_indices = max_pool_with_argmax(conv2_2, 'pool2')
+    print("pool1: ", pool1.shape)
 
-    conv3_1 = conv_layer_with_bn(pool2, "conv3_1")
-    conv3_2 = conv_layer_with_bn(conv3_1, "conv3_2")
-    conv3_3 = conv_layer_with_bn(conv3_2, "conv3_3")
-    pool3, pool3_indices = max_pool_with_argmax(conv3_3, 'pool3')
+    conv2_1 = conv_layer_with_bn(pool1, is_training, "conv2_1")
+    conv2_2 = conv_layer_with_bn(conv2_1, is_training, "conv2_2")
+    pool2, pool2_indices = max_pool_with_argmax(conv2_2)
 
-    conv4_1 = conv_layer_with_bn(pool3, "conv4_1")
-    conv4_2 = conv_layer_with_bn(conv4_1, "conv4_2")
-    conv4_3 = conv_layer_with_bn(conv4_2, "conv4_3")
-    pool4, pool4_indices = max_pool_with_argmax(conv4_3, 'pool4')
+    print("pool2: ", pool2.shape)
 
-    conv5_1 = conv_layer_with_bn(pool4, "conv5_1")
-    conv5_2 = conv_layer_with_bn(conv5_1, "conv5_2")
-    conv5_3 = conv_layer_with_bn(conv5_2, "conv5_3")
-    pool5, pool5_indices = max_pool_with_argmax(conv5_3, 'pool5')
+    conv3_1 = conv_layer_with_bn(pool2, is_training, "conv3_1")
+    conv3_2 = conv_layer_with_bn(conv3_1, is_training, "conv3_2")
+    conv3_3 = conv_layer_with_bn(conv3_2, is_training, "conv3_3")
+    pool3, pool3_indices = max_pool_with_argmax(conv3_3)
+
+    print("pool3: ", pool3.shape)
+
+    conv4_1 = conv_layer_with_bn(pool3, is_training, "conv4_1")
+    conv4_2 = conv_layer_with_bn(conv4_1, is_training, "conv4_2")
+    conv4_3 = conv_layer_with_bn(conv4_2, is_training, "conv4_3")
+    pool4, pool4_indices = max_pool_with_argmax(conv4_3)
+
+    print("pool4: ", pool4.shape)
+
+    conv5_1 = conv_layer_with_bn(pool4, is_training, "conv5_1")
+    conv5_2 = conv_layer_with_bn(conv5_1, is_training, "conv5_2")
+    conv5_3 = conv_layer_with_bn(conv5_2, is_training, "conv5_3")
+    pool5, pool5_indices = max_pool_with_argmax(conv5_3)
+
+    print("pool5: ", pool5.shape)
 
     # End of encoders
     # start of decoders
 
     up_sample_5 = max_unpool_with_argmax(pool5,
                                          pool5_indices,
-                                         output_shape=tf.shape(conv5_3))
-    up_conv5_1 = conv_layer_with_bn(up_sample_5, "up_conv5_1", shape=[3, 3, 512, 512])
-    up_conv5_2 = conv_layer_with_bn(up_conv5_1, "up_conv5_2", shape=[3, 3, 512, 512])
-    up_conv5_3 = conv_layer_with_bn(up_conv5_2, "up_conv5_3", shape=[3, 3, 512, 512])
+                                         output_shape=conv5_3.shape)
+    up_conv5_1 = deconv_layer_with_bn(up_sample_5, [3, 3, 512, 512],
+                                      is_training, "up_conv5_1")
+    up_conv5_2 = deconv_layer_with_bn(up_conv5_1, [3, 3, 512, 512],
+                                      is_training, "up_conv5_2")
+    up_conv5_3 = deconv_layer_with_bn(up_conv5_2, [3, 3, 512, 512],
+                                      is_training, "up_conv5_3")
+
+    print("up_conv5: ", up_conv5_3.shape)
 
     up_sample_4 = max_unpool_with_argmax(up_conv5_3,
                                          pool4_indices,
-                                         output_shape=tf.shape(conv4_3))
-    up_conv4_1 = conv_layer_with_bn(up_sample_4, "up_conv4_1", shape=[3, 3, 512, 512])
-    up_conv4_2 = conv_layer_with_bn(up_conv4_1, "up_conv4_2", shape=[3, 3, 512, 512])
-    up_conv4_3 = conv_layer_with_bn(up_conv4_2, "up_conv4_3", shape=[3, 3, 512, 512])
+                                         output_shape=conv4_3.shape)
+    up_conv4_1 = deconv_layer_with_bn(up_sample_4, [3, 3, 512, 512],
+                                      is_training, "up_conv4_1")
+    up_conv4_2 = deconv_layer_with_bn(up_conv4_1, [3, 3, 512, 512],
+                                      is_training, "up_conv4_2")
+    up_conv4_3 = deconv_layer_with_bn(up_conv4_2, [3, 3, 512, 256],
+                                      is_training, "up_conv4_3")
+
+    print("up_conv4: ", up_conv4_3.shape)
 
     up_sample_3 = max_unpool_with_argmax(up_conv4_3,
                                          pool3_indices,
-                                         output_shape=tf.shape(conv3_3))
-    up_conv3_1 = conv_layer_with_bn(up_sample_3, "up_conv3_1", shape=[3, 3, 512, 256])
-    up_conv3_2 = conv_layer_with_bn(up_conv3_1, "up_conv3_2", shape=[3, 3, 256, 256])
-    up_conv3_3 = conv_layer_with_bn(up_conv3_2, "up_conv3_3", shape=[3, 3, 256, 256])
+                                         output_shape=conv3_3.shape)
+    up_conv3_1 = deconv_layer_with_bn(up_sample_3, [3, 3, 256, 256],
+                                      is_training, "up_conv3_1")
+    up_conv3_2 = deconv_layer_with_bn(up_conv3_1, [3, 3, 256, 256],
+                                      is_training, "up_conv3_2")
+    up_conv3_3 = deconv_layer_with_bn(up_conv3_2, [3, 3, 256, 128],
+                                      is_training, "up_conv3_3")
+
+    print("up_conv3: ", up_conv3_3.shape)
 
     up_sample_2 = max_unpool_with_argmax(up_conv3_3,
                                          pool2_indices,
-                                         output_shape=tf.shape(conv2_2))
-    up_conv2_1 = conv_layer_with_bn(up_sample_2, "up_conv2_1", shape=[3, 3, 256, 128])
-    up_conv2_2 = conv_layer_with_bn(up_conv2_1, "up_conv2_2", shape=[3, 3, 128, 128])
+                                         output_shape=conv2_2.shape)
+    up_conv2_1 = deconv_layer_with_bn(up_sample_2, [3, 3, 128, 128],
+                                      is_training, "up_conv2_1")
+    up_conv2_2 = deconv_layer_with_bn(up_conv2_1, [3, 3, 128, 64],
+                                      is_training, "up_conv2_2")
+
+    print("up_conv2: ", up_conv2_2.shape)
 
     up_sample_1 = max_unpool_with_argmax(up_conv2_2,
                                          pool1_indices,
-                                         output_shape=tf.shape(conv1_2))
-    up_conv1_1 = conv_layer_with_bn(up_sample_1, "up_conv1_1", shape=[3, 3, 128, 64])
-    up_conv1_2 = conv_layer_with_bn(up_conv1_1, "up_conv1_2", shape=[3, 3, 64, K])
+                                         output_shape=conv1_2.shape)
+    up_conv1_1 = deconv_layer_with_bn(up_sample_1, [3, 3, 64, 64],
+                                      is_training, "up_conv1_1")
+    up_conv1_2 = deconv_layer_with_bn(up_conv1_1, [3, 3, 64, K],
+                                      is_training, "up_conv1_2")
+
+    print("up_conv1: ", up_conv1_2.shape)
 
     return up_conv1_2

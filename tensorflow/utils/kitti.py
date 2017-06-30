@@ -5,8 +5,8 @@ import scipy as scp
 import scipy.misc
 
 
-KITTI_TRAIN_DIR_PREFIX = '/Users/limeng/Downloads/kitti/data_road/training/image_2/'
-KITTI_GT_DIR_PREFIX = '/Users/limeng/Downloads/kitti/data_road/training/gt_image_2/'
+KITTI_TRAIN_DIR_PREFIX = '/usr/local/google/home/limeng/Downloads/kitti/data_road/training/image_2/'
+KITTI_GT_DIR_PREFIX = '/usr/local/google/home/limeng/Downloads/kitti/data_road/training/gt_image_2/'
 
 UM_TRAIN_TEMPLATE = "um_0000%02d.png"
 UU_TRAIN_TEMPLATE = "uu_0000%02d.png"

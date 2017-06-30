@@ -19,7 +19,8 @@ L2NormConst = 0.001
 
 train_vars = tf.trainable_variables()
 
-sqrt_diff = tf.reduce_mean(tf.square(tf.subtract(segnet_vgg.y_, segnet_vgg.y)))
+y = segnet_vgg.get_model()
+sqrt_diff = tf.reduce_mean(tf.square(tf.subtract(segnet_vgg.y_, y)))
 norm =  + tf.add_n([tf.nn.l2_loss(v) for v in train_vars]) * L2NormConst
 loss = sqrt_diff + norm
 train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
@@ -37,19 +38,19 @@ summary_writer = tf.summary.FileWriter('train', sess.graph)
 
 for i in range(EPOCH):
     xs, ys = kitti_data.next_batch(i % UU_TRAIN_SET_SIZE)
-    train_step.run(feed_dict={segnet_vgg.x: xs, segnet_vgg.y_: ys, segnet_vgg.keep_prob: 0.8})
+    _, summary = sess.run([train_step, merged_summary_op],
+                          feed_dict={segnet_vgg.x: xs,
+                                     segnet_vgg.y_: ys,
+                                     segnet_vgg.is_training_: True})
     if i % 10 == 0:
         xs, ys = kitti_data.load_val_batch()
         loss_value = loss.eval(feed_dict={segnet_vgg.x: xs,
                                           segnet_vgg.y_: ys,
-                                          segnet_vgg.keep_prob: 1.0})
-            print("Epoch: %d, Loss: %g" % (i, loss_value))
+                                          segnet_vgg.is_training_: False})
+        print("Epoch: %d, Loss: %g" % (i, loss_value))
         if not os.path.exists(LOG_DIR):
             os.makedirs(LOG_DIR)
         checkpoint_path = os.path.join(LOG_DIR, "model.ckpt")
         filename = saver.save(sess, checkpoint_path)
-
     # write logs at every iteration
-    summary = merged_summary_op.eval(
-        feed_dict={segnet_vgg.x: xs, segnet_vgg.y_: ys, segnet_vgg.keep_prob: 1.0})
     summary_writer.add_summary(summary, i)
