@@ -1,6 +1,6 @@
 import os
 import tensorflow as tf
-from utils import kitti
+from utils import camvid
 import segnet_vgg
 
 LOG_DIR = 'save'

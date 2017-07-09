@@ -55,7 +55,9 @@ class PoolingTest(test.TestCase):
         with self.test_session(use_gpu=True) as sess:
             t = constant_op.constant(tensor_input, shape=[1, 3, 3, 2])
             out_op, argmax_op = segnet_vgg.max_pool_with_argmax(t)
-            out_op = segnet_vgg.max_unpool_with_argmax(out_op, argmax_op, output_shape=np.int64([1, 3, 3, 2]))
+            out_op = segnet_vgg.max_unpool_with_argmax(out_op,
+                                                       argmax_op,
+                                                       output_shape=np.int64([1, 3, 3, 2]))
             out = sess.run([out_op])
             self.assertAllClose(out, [[[[[  0.,   0.],
                                          [  0.,   0.],
@@ -96,7 +98,9 @@ class PoolingTest(test.TestCase):
         config.gpu_options.allocator_type = 'BFC'
         tensor_input = tf.ones([10, 495, 289, 3], tf.float32)
         with self.test_session(use_gpu=True, config = config) as sess:
-            conv_op = segnet_vgg.deconv_layer_with_bn(tensor_input, [3, 3, 3, 128], tf.constant(True), "conv1_1")
+            conv_op = segnet_vgg.deconv_layer_with_bn(tensor_input,
+                                                      [3, 3, 3, 128],
+                                                      tf.constant(True), "conv1_1")
             sess.run(tf.global_variables_initializer())
             conv_out = sess.run([conv_op])
             self.assertEqual(np.array(conv_out).shape, (1, 10, 495, 289, 128))
