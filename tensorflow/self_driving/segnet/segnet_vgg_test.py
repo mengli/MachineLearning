@@ -9,6 +9,7 @@ import numpy as np
 
 import segnet_vgg
 
+NUM_CLASSES = 11
 
 class PoolingTest(test.TestCase):
 
@@ -105,17 +106,16 @@ class PoolingTest(test.TestCase):
             conv_out = sess.run([conv_op])
             self.assertEqual(np.array(conv_out).shape, (1, 10, 495, 289, 128))
 
-    def testGetModel(self):
+    def testInference(self):
         config = tf.ConfigProto()
         config.gpu_options.allocator_type = 'BFC'
-        segnet_vgg.x_ = tf.ones([10, 495, 289, 3], tf.float32)
-        segnet_vgg.is_training_ = True
-        segnet_vgg.K = 2
+        train_data = tf.ones([10, 495, 289, 3], tf.float32)
+        is_training = True
         with self.test_session(use_gpu=True, config = config) as sess:
-            model_op = segnet_vgg.get_model()
+            model_op = segnet_vgg.inference(train_data, is_training)
             sess.run(tf.global_variables_initializer())
             model_out = sess.run([model_op])
-            self.assertEqual(np.array(model_out).shape, (1, 10, 495, 289, 2))
+            self.assertEqual(np.array(model_out).shape, (1, 10, 495, 289, NUM_CLASSES))
 
 
 if __name__ == "__main__":

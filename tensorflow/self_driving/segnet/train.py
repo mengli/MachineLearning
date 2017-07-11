@@ -5,52 +5,86 @@ import segnet_vgg
 
 LOG_DIR = 'save'
 EPOCH = 5000
-N_cl = 2
-UU_TRAIN_SET_SIZE = 98 - 9
-UU_TEST_SET_SIZE = 9
+BATCH_SIZE = 5
+IMAGE_HEIGHT = 360
+IMAGE_WIDTH = 480
+IMAGE_CHANNEL = 3
+NUM_CLASSES = 11
+INITIAL_LEARNING_RATE = 0.0001
 
-config = tf.ConfigProto()
-config.gpu_options.allocator_type = 'BFC'
-sess = tf.InteractiveSession(config = config)
+image_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/train.txt"
+val_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/val.txt"
 
-kitti_data = kitti.Kitti()
 
-L2NormConst = 0.001
+def loss(logits, labels):
+    logits = tf.reshape(logits, [-1, NUM_CLASSES])
+    labels = tf.reshape(labels, [-1])
 
-train_vars = tf.trainable_variables()
+    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        logits=logits, labels=labels, name='cross_entropy')
+    cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy_mean')
+    tf.add_to_collection('losses', cross_entropy_mean)
+    return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
-y = segnet_vgg.get_model()
-sqrt_diff = tf.reduce_mean(tf.square(tf.subtract(segnet_vgg.y_, y)))
-norm =  + tf.add_n([tf.nn.l2_loss(v) for v in train_vars]) * L2NormConst
-loss = sqrt_diff + norm
-train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
-sess.run(tf.global_variables_initializer())
 
-# create a summary to monitor cost tensor
-tf.summary.scalar("loss", loss)
-# merge all summaries into a single op
-merged_summary_op = tf.summary.merge_all()
+def train(total_loss):
+    tf.summary.scalar('total_loss', total_loss)
+    optimizer = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE)
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+    return optimizer.minimize(total_loss, global_step=global_step)
 
-saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
 
-# op to write logs to Tensorboard
-summary_writer = tf.summary.FileWriter('train', sess.graph)
+def train():
+    image_filenames, label_filenames = camvid.get_filename_list(image_dir)
+    val_image_filenames, val_label_filenames = camvid.get_filename_list(val_dir)
 
-for i in range(EPOCH):
-    xs, ys = kitti_data.next_batch(i % UU_TRAIN_SET_SIZE)
-    _, summary = sess.run([train_step, merged_summary_op],
-                          feed_dict={segnet_vgg.x: xs,
-                                     segnet_vgg.y_: ys,
-                                     segnet_vgg.is_training_: True})
-    if i % 10 == 0:
-        xs, ys = kitti_data.load_val_batch()
-        loss_value = loss.eval(feed_dict={segnet_vgg.x: xs,
-                                          segnet_vgg.y_: ys,
-                                          segnet_vgg.is_training_: False})
-        print("Epoch: %d, Loss: %g" % (i, loss_value))
-        if not os.path.exists(LOG_DIR):
-            os.makedirs(LOG_DIR)
-        checkpoint_path = os.path.join(LOG_DIR, "model.ckpt")
-        filename = saver.save(sess, checkpoint_path)
-    # write logs at every iteration
-    summary_writer.add_summary(summary, i)
+    with tf.Graph().as_default():
+        config = tf.ConfigProto()
+        config.gpu_options.allocator_type = 'BFC'
+        sess = tf.InteractiveSession(config = config)
+
+        train_data = tf.placeholder(tf.float32,
+                                    shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNEL])
+        train_labels = tf.placeholder(tf.int64,
+                                      shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
+        is_training = tf.placeholder(tf.bool, name='is_training')
+
+        images, labels = camvid.CamVidInputs(image_filenames,
+                                             label_filenames,
+                                             BATCH_SIZE)
+        val_images, val_labels = camvid.CamVidInputs(val_image_filenames,
+                                                     val_label_filenames,
+                                                     BATCH_SIZE)
+
+        logits = segnet_vgg.inference(train_data, is_training)
+        total_loss = loss(logits, train_labels)
+        train_op = train(total_loss)
+
+        merged_summary_op = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter('train', sess.graph)
+        saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+
+        sess.run(tf.global_variables_initializer())
+
+        for i in range(EPOCH):
+            image_batch ,label_batch = sess.run([images, labels])
+            feed_dict = {
+                train_data: image_batch,
+                train_labels: label_batch,
+                is_training: True
+            }
+            _, summary = sess.run([train_op, total_loss, merged_summary_op],
+                                  feed_dict=feed_dict)
+            if i % 10 == 0:
+                print("Start validating...")
+                val_images_batch, val_labels_batch = sess.run([val_images, val_labels])
+                loss_value = total_loss.eval(feed_dict={train_data: val_images_batch,
+                                                        train_labels: val_labels_batch,
+                                                        is_training: False})
+                print("Epoch: %d, Loss: %g" % (i, loss_value))
+                if not os.path.exists(LOG_DIR):
+                    os.makedirs(LOG_DIR)
+                checkpoint_path = os.path.join(LOG_DIR, "model.ckpt")
+                saver.save(sess, checkpoint_path)
+            # write logs at every iteration
+            summary_writer.add_summary(summary, i)
