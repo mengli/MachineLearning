@@ -96,12 +96,12 @@ def get_filename_list(path):
     return image_filenames, label_filenames
 
 
-def CamVidInputs(image_filenames, label_filenames, batch_size):
+def CamVidInputs(image_filenames, label_filenames, batch_size, shuffle=True):
 
     images = ops.convert_to_tensor(image_filenames, dtype=dtypes.string)
     labels = ops.convert_to_tensor(label_filenames, dtype=dtypes.string)
 
-    filename_queue = tf.train.slice_input_producer([images, labels], shuffle=True)
+    filename_queue = tf.train.slice_input_producer([images, labels], shuffle=shuffle)
 
     image, label = CamVid_reader(filename_queue)
     reshaped_image = tf.cast(image, tf.float32)
@@ -115,4 +115,4 @@ def CamVidInputs(image_filenames, label_filenames, batch_size):
     # Generate a batch of images and labels by building up a queue of examples.
     return _generate_image_and_label_batch(reshaped_image, label,
                                            min_queue_examples, batch_size,
-                                           shuffle=True)
+                                           shuffle=shuffle)

@@ -1,16 +1,22 @@
+"""Train SegNet.
+
+nohup python -u -m self_driving.segnet.train > self_driving/segnet/output.txt 2>&1 &
+
+"""
+
 import os
 import tensorflow as tf
 from utils import camvid
 import segnet_vgg
 
 LOG_DIR = 'save'
-EPOCH = 5000
-BATCH_SIZE = 1
+EPOCH = 30
+BATCH_SIZE = 8
 IMAGE_HEIGHT = 360
 IMAGE_WIDTH = 480
 IMAGE_CHANNEL = 3
 NUM_CLASSES = 12
-INITIAL_LEARNING_RATE = 0.00001
+INITIAL_LEARNING_RATE = 0.0001
 
 image_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/train.txt"
 val_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/val.txt"
@@ -28,9 +34,11 @@ def loss(logits, labels):
 
 
 def train(total_loss):
-    tf.summary.scalar('total_loss', total_loss)
-    optimizer = tf.train.AdamOptimizer(INITIAL_LEARNING_RATE)
     global_step = tf.Variable(0, name='global_step', trainable=False)
+    learning_rate = tf.train.exponential_decay(
+        INITIAL_LEARNING_RATE, global_step, EPOCH * 0.2, 0.9, staircase=True)
+    tf.summary.scalar('total_loss', total_loss)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     return optimizer.minimize(total_loss, global_step=global_step)
 
 
@@ -46,9 +54,14 @@ def main(_):
             sess = tf.InteractiveSession(config = config)
 
             train_data = tf.placeholder(tf.float32,
-                                        shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNEL])
+                                        shape=[BATCH_SIZE,
+                                               IMAGE_HEIGHT,
+                                               IMAGE_WIDTH,
+                                               IMAGE_CHANNEL],
+                                        name='train_data')
             train_labels = tf.placeholder(tf.int64,
-                                          shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
+                                          shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1],
+                                          name='train_labels')
             is_training = tf.placeholder(tf.bool, name='is_training')
 
             images, labels = camvid.CamVidInputs(image_filenames,
