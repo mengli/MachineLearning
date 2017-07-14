@@ -106,7 +106,7 @@ def CamVidInputs(image_filenames, label_filenames, batch_size):
     image, label = CamVid_reader(filename_queue)
     reshaped_image = tf.cast(image, tf.float32)
 
-    min_fraction_of_examples_in_queue = 0.4
+    min_fraction_of_examples_in_queue = 0.05
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     print ('Filling queue with %d CamVid images before starting to train. '

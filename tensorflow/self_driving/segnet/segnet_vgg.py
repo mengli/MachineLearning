@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 VGG16_NPY_PATH = 'vgg16.npy'
-NUM_CLASSES = 11
+NUM_CLASSES = 12
 WD = 5e-4
 
 data_dict = np.load(VGG16_NPY_PATH, encoding='latin1').item()
@@ -32,37 +32,40 @@ def variable_summaries(var):
             tf.summary.histogram(name, var)
 
 
-def get_conv_filter(name):
+def load_conv_filter(name):
     init = tf.constant_initializer(value=data_dict[name][0],
                                    dtype=tf.float32)
     shape = data_dict[name][0].shape
-    var = tf.get_variable(name="weight", initializer=init, shape=shape)
+    var = tf.get_variable(name=name + "_weight", initializer=init, shape=shape)
     if not tf.get_variable_scope().reuse:
-        weight_decay = tf.multiply(tf.nn.l2_loss(var), WD, name='weight_loss')
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), WD, name=name + '_weight_decay')
         tf.add_to_collection('losses', weight_decay)
     variable_summaries(var)
     return var
 
 
-def get_deconv_filter(f_shape):
-    init = tf.truncated_normal(f_shape, stddev=0.05, dtype=tf.float32)
-    var = tf.get_variable(name="up_filter", initializer=init)
-    return var
-
-
-def get_bias(name):
-    bias_wights = data_dict[name][1]
-    shape = data_dict[name][1].shape
-    init = tf.constant_initializer(value=bias_wights,
-                                   dtype=tf.float32)
-    var = tf.get_variable(name="biases", initializer=init, shape=shape)
+def get_conv_filter(name, shape):
+    init = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
+    var = tf.get_variable(name=name + "_weight", initializer=init)
+    weight_decay = tf.multiply(tf.nn.l2_loss(var), WD, name=name + '_weight_decay')
+    tf.add_to_collection('losses', weight_decay)
     variable_summaries(var)
     return var
 
 
-def get_deconv_bias(shape):
-    init = tf.constant(0.1, shape=shape)
-    var = tf.get_variable(name="biases", initializer=init)
+def load_conv_bias(name):
+    bias_wights = data_dict[name][1]
+    shape = data_dict[name][1].shape
+    init = tf.constant_initializer(value=bias_wights,
+                                   dtype=tf.float32)
+    var = tf.get_variable(name=name + "_bias", initializer=init, shape=shape)
+    variable_summaries(var)
+    return var
+
+
+def get_conv_bias(name, shape):
+    init = tf.constant(0.0, shape=shape)
+    var = tf.get_variable(name=name + "_bias", initializer=init)
     variable_summaries(var)
     return var
 
@@ -87,20 +90,14 @@ def batch_norm_layer(bottom, is_training, scope):
                                                         reuse=True))
 
 
-def conv_layer_with_bn(bottom, is_training, name=None):
+def conv_layer_with_bn(bottom=None, shape=None, is_training=True, name=None):
     with tf.variable_scope(name) as scope:
-        weight = get_conv_filter(name)
-        bias = get_bias(name)
-        conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
-        conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
-    activation_summary(conv)
-    return conv
-
-
-def deconv_layer_with_bn(bottom, shape, is_training, name=None):
-    with tf.variable_scope(name) as scope:
-        weight = get_deconv_filter(shape)
-        bias = get_deconv_bias([shape[3]])
+        if shape:
+            weight = get_conv_filter(name, shape)
+            bias = get_conv_bias(name, [shape[3]])
+        else:
+            weight = load_conv_filter(name)
+            bias = load_conv_bias(name)
         conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
         conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name))
     activation_summary(conv)
@@ -109,11 +106,12 @@ def deconv_layer_with_bn(bottom, shape, is_training, name=None):
 
 def max_pool_with_argmax(bottom):
     with tf.name_scope('max_pool_arg_max'):
-        _, indices = tf.nn.max_pool_with_argmax(
-            bottom,
-            ksize=[1, 2, 2, 1],
-            strides=[1, 2, 2, 1],
-            padding='SAME')
+        with tf.device('/gpu:0'):
+            _, indices = tf.nn.max_pool_with_argmax(
+                bottom,
+                ksize=[1, 2, 2, 1],
+                strides=[1, 2, 2, 1],
+                padding='SAME')
         indices = tf.stop_gradient(indices)
         bottom = tf.nn.max_pool(bottom,
                                 ksize=[1, 2, 2, 1],
@@ -151,36 +149,37 @@ def max_unpool_with_argmax(bottom, mask, output_shape=None):
 
 def inference(images, is_training):
     training = tf.equal(is_training, tf.constant(True))
-    conv1_1 = conv_layer_with_bn(images, training, "conv1_1")
-    conv1_2 = conv_layer_with_bn(conv1_1, training, "conv1_2")
+    conv1_1 = conv_layer_with_bn(bottom=images, is_training=training, name="conv1_1")
+    conv1_2 = conv_layer_with_bn(bottom=conv1_1, is_training=training, name="conv1_2")
     pool1, pool1_indices = max_pool_with_argmax(conv1_2)
 
     print("pool1: ", pool1.shape)
 
-    conv2_1 = conv_layer_with_bn(pool1, training, "conv2_1")
-    conv2_2 = conv_layer_with_bn(conv2_1, training, "conv2_2")
+    conv2_1 = conv_layer_with_bn(bottom=pool1, is_training=training, name="conv2_1")
+    conv2_2 = conv_layer_with_bn(bottom=conv2_1, is_training=training, name="conv2_2")
     pool2, pool2_indices = max_pool_with_argmax(conv2_2)
 
     print("pool2: ", pool2.shape)
 
-    conv3_1 = conv_layer_with_bn(pool2, training, "conv3_1")
-    conv3_2 = conv_layer_with_bn(conv3_1, training, "conv3_2")
-    conv3_3 = conv_layer_with_bn(conv3_2, training, "conv3_3")
+    conv3_1 = conv_layer_with_bn(bottom=pool2, is_training=training, name="conv3_1")
+    conv3_2 = conv_layer_with_bn(bottom=conv3_1, is_training=training, name="conv3_2")
+    conv3_3 = conv_layer_with_bn(bottom=conv3_2, is_training=training, name="conv3_3")
     pool3, pool3_indices = max_pool_with_argmax(conv3_3)
 
     print("pool3: ", pool3.shape)
 
-    conv4_1 = conv_layer_with_bn(pool3, training, "conv4_1")
-    conv4_2 = conv_layer_with_bn(conv4_1, training, "conv4_2")
-    conv4_3 = conv_layer_with_bn(conv4_2, training, "conv4_3")
+    conv4_1 = conv_layer_with_bn(bottom=pool3, is_training=training, name="conv4_1")
+    conv4_2 = conv_layer_with_bn(bottom=conv4_1, is_training=training, name="conv4_2")
+    conv4_3 = conv_layer_with_bn(bottom=conv4_2, is_training=training, name="conv4_3")
     pool4, pool4_indices = max_pool_with_argmax(conv4_3)
 
     print("pool4: ", pool4.shape)
 
-    conv5_1 = conv_layer_with_bn(pool4, training, "conv5_1")
-    conv5_2 = conv_layer_with_bn(conv5_1, training, "conv5_2")
-    conv5_3 = conv_layer_with_bn(conv5_2, training, "conv5_3")
+    conv5_1 = conv_layer_with_bn(bottom=pool4, is_training=training, name="conv5_1")
+    conv5_2 = conv_layer_with_bn(bottom=conv5_1, is_training=training, name="conv5_2")
+    conv5_3 = conv_layer_with_bn(bottom=conv5_2, is_training=training, name="conv5_3")
     pool5, pool5_indices = max_pool_with_argmax(conv5_3)
+    #pool5 = tf.nn.max_pool(conv5, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
     print("pool5: ", pool5.shape)
 
@@ -190,57 +189,56 @@ def inference(images, is_training):
     up_sample_5 = max_unpool_with_argmax(pool5,
                                          pool5_indices,
                                          output_shape=conv5_3.shape)
-    up_conv5_1 = deconv_layer_with_bn(up_sample_5, [3, 3, 512, 512],
-                                      training, "up_conv5_1")
-    up_conv5_2 = deconv_layer_with_bn(up_conv5_1, [3, 3, 512, 512],
-                                      training, "up_conv5_2")
-    up_conv5_3 = deconv_layer_with_bn(up_conv5_2, [3, 3, 512, 512],
-                                      training, "up_conv5_3")
+    #up_sample_5 = deconv_layer(pool5, [2, 2, 256, 256], conv5.shape, name="up_sample_5")
+    up_conv5 = conv_layer_with_bn(bottom=up_sample_5,
+                                  shape=[3, 3, 512, 512],
+                                  is_training=training,
+                                  name="up_conv5")
 
-    print("up_conv5: ", up_conv5_3.shape)
+    print("up_conv5: ", up_conv5.shape)
 
-    up_sample_4 = max_unpool_with_argmax(up_conv5_3,
+    up_sample_4 = max_unpool_with_argmax(up_conv5,
                                          pool4_indices,
                                          output_shape=conv4_3.shape)
-    up_conv4_1 = deconv_layer_with_bn(up_sample_4, [3, 3, 512, 512],
-                                      training, "up_conv4_1")
-    up_conv4_2 = deconv_layer_with_bn(up_conv4_1, [3, 3, 512, 512],
-                                      training, "up_conv4_2")
-    up_conv4_3 = deconv_layer_with_bn(up_conv4_2, [3, 3, 512, 256],
-                                      training, "up_conv4_3")
+    #up_sample_4 = deconv_layer(up_conv5, [2, 2, 256, 256], conv4.shape, name="up_sample_4")
+    up_conv4 = conv_layer_with_bn(bottom=up_sample_4,
+                                  shape=[3, 3, 512, 256],
+                                  is_training=training,
+                                  name="up_conv4")
 
-    print("up_conv4: ", up_conv4_3.shape)
+    print("up_conv4: ", up_conv4.shape)
 
-    up_sample_3 = max_unpool_with_argmax(up_conv4_3,
+    up_sample_3 = max_unpool_with_argmax(up_conv4,
                                          pool3_indices,
                                          output_shape=conv3_3.shape)
-    up_conv3_1 = deconv_layer_with_bn(up_sample_3, [3, 3, 256, 256],
-                                      training, "up_conv3_1")
-    up_conv3_2 = deconv_layer_with_bn(up_conv3_1, [3, 3, 256, 256],
-                                      training, "up_conv3_2")
-    up_conv3_3 = deconv_layer_with_bn(up_conv3_2, [3, 3, 256, 128],
-                                      training, "up_conv3_3")
+    #up_sample_3 = deconv_layer(up_conv4, [2, 2, 256, 256], conv3.shape, name="up_sample_3")
+    up_conv3 = conv_layer_with_bn(bottom=up_sample_3,
+                                  shape=[3, 3, 256, 128],
+                                  is_training=training,
+                                  name="up_conv3")
 
-    print("up_conv3: ", up_conv3_3.shape)
+    print("up_conv3: ", up_conv3.shape)
 
-    up_sample_2 = max_unpool_with_argmax(up_conv3_3,
+    up_sample_2 = max_unpool_with_argmax(up_conv3,
                                          pool2_indices,
                                          output_shape=conv2_2.shape)
-    up_conv2_1 = deconv_layer_with_bn(up_sample_2, [3, 3, 128, 128],
-                                      training, "up_conv2_1")
-    up_conv2_2 = deconv_layer_with_bn(up_conv2_1, [3, 3, 128, 64],
-                                      training, "up_conv2_2")
+    #up_sample_2 = deconv_layer(up_conv3, [2, 2, 128, 128], conv2.shape, name="up_sample_2")
+    up_conv2 = conv_layer_with_bn(bottom=up_sample_2,
+                                  shape=[3, 3, 128, 64],
+                                  is_training=training,
+                                  name="up_conv2")
 
-    print("up_conv2: ", up_conv2_2.shape)
+    print("up_conv2: ", up_conv2.shape)
 
-    up_sample_1 = max_unpool_with_argmax(up_conv2_2,
+    up_sample_1 = max_unpool_with_argmax(up_conv2,
                                          pool1_indices,
                                          output_shape=conv1_2.shape)
-    up_conv1_1 = deconv_layer_with_bn(up_sample_1, [3, 3, 64, 64],
-                                      training, "up_conv1_1")
-    logits = deconv_layer_with_bn(up_conv1_1, [3, 3, 64, NUM_CLASSES],
-                                      training, "up_conv1_2")
+    #up_sample_1 = deconv_layer(up_conv2, [2, 2, 64, 64], conv1.shape, name="up_sample_1")
+    logits = conv_layer_with_bn(bottom=up_sample_1,
+                                shape=[3, 3, 64, NUM_CLASSES],
+                                is_training=training,
+                                name="up_conv1")
 
-    print("up_conv1: ", logits.shape)
+    print("logits: ", logits.shape)
 
     return logits
