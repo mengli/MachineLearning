@@ -10,7 +10,7 @@ from utils import camvid
 import segnet_vgg
 
 LOG_DIR = 'save'
-EPOCH = 30
+EPOCH = 5000
 BATCH_SIZE = 8
 IMAGE_HEIGHT = 360
 IMAGE_WIDTH = 480
