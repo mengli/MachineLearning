@@ -29,8 +29,9 @@ def color_image(image, num_classes):
 
 
 def save_output(prediction):
-    pred = tf.argmax(prediction, dimension=3).eval()
-    print(prediction[0][180][200])
+    pred = tf.argmax(prediction[0], dimension=3).eval()
+    print(prediction[0][0][180][200])
+    print(pred[0][180][200])
     for i in range(BATCH_SIZE):
         up_color = color_image(pred[i], NUM_CLASSES)
         misc.imsave('output/decision_%d.png' % i, up_color)
@@ -57,21 +58,19 @@ def main(_):
             train_label = graph.get_tensor_by_name("train_labels:0")
             is_training = graph.get_tensor_by_name("is_training:0")
             logits = tf.get_collection("logits")[0]
-            total_losses = tf.get_collection("losses")[0]
 
             # Start the queue runners.
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
             for i in range(EPOCH):
-                print i
                 image_batch ,label_batch = sess.run([images, labels])
                 feed_dict = {
                     train_data: image_batch,
                     train_label: label_batch,
-                    is_training: False
+                    is_training: True
                 }
-                prediction, loss = sess.run([logits, total_losses], feed_dict)
+                prediction = sess.run([logits], feed_dict)
                 save_output(prediction)
                 for idx in range(BATCH_SIZE):
                     misc.imsave('output/train_%d.png' % idx, image_batch[idx])
