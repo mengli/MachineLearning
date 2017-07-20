@@ -79,6 +79,9 @@ def main(_):
             merged_summary_op = tf.summary.merge_all()
             summary_writer = tf.summary.FileWriter('train', sess.graph)
             saver = tf.train.Saver(write_version=tf.train.SaverDef.V2)
+            if not os.path.exists(LOG_DIR):
+                os.makedirs(LOG_DIR)
+            checkpoint_path = os.path.join(LOG_DIR, "segnet.ckpt")
 
             sess.run(tf.global_variables_initializer())
 
@@ -102,9 +105,6 @@ def main(_):
                                                             train_labels: val_labels_batch,
                                                             is_training: False})
                     print("Epoch: %d, Loss: %g" % (i, loss_value))
-                    if not os.path.exists(LOG_DIR):
-                        os.makedirs(LOG_DIR)
-                    checkpoint_path = os.path.join(LOG_DIR, "model.ckpt")
                     saver.save(sess, checkpoint_path)
                 # write logs at every iteration
                 summary_writer.add_summary(summary, i)

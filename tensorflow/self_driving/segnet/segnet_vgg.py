@@ -234,5 +234,6 @@ def inference(images, is_training):
                                 name="up_conv1")
 
     print("logits: ", logits.shape)
+    tf.add_to_collection("logits", logits)
 
     return logits
