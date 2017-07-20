@@ -10,7 +10,7 @@ from utils import camvid
 import segnet_vgg
 
 LOG_DIR = 'save'
-EPOCH = 3000
+EPOCH = 4000
 BATCH_SIZE = 8
 IMAGE_HEIGHT = 360
 IMAGE_WIDTH = 480
@@ -62,7 +62,6 @@ def main(_):
             train_labels = tf.placeholder(tf.int64,
                                           shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1],
                                           name='train_labels')
-            is_training = tf.placeholder(tf.bool, name='is_training')
 
             images, labels = camvid.CamVidInputs(image_filenames,
                                                  label_filenames,
@@ -71,7 +70,7 @@ def main(_):
                                                          val_label_filenames,
                                                          BATCH_SIZE)
 
-            logits = segnet_vgg.inference(train_data, is_training)
+            logits = segnet_vgg.inference(train_data)
             total_loss = loss(logits, train_labels)
             train_op = train(total_loss)
             check_op = tf.add_check_numerics_ops()
@@ -93,8 +92,7 @@ def main(_):
                 image_batch ,label_batch = sess.run([images, labels])
                 feed_dict = {
                     train_data: image_batch,
-                    train_labels: label_batch,
-                    is_training: True
+                    train_labels: label_batch
                 }
                 _, _, _, summary = sess.run([train_op, total_loss, check_op, merged_summary_op],
                                          feed_dict=feed_dict)
@@ -102,8 +100,7 @@ def main(_):
                     print("Start validating...")
                     val_images_batch, val_labels_batch = sess.run([val_images, val_labels])
                     loss_value = total_loss.eval(feed_dict={train_data: val_images_batch,
-                                                            train_labels: val_labels_batch,
-                                                            is_training: False})
+                                                            train_labels: val_labels_batch})
                     print("Epoch: %d, Loss: %g" % (i, loss_value))
                     saver.save(sess, checkpoint_path)
                 # write logs at every iteration

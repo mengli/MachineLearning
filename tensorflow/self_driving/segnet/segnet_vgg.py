@@ -74,23 +74,14 @@ def conv2d(bottom, weight):
     return tf.nn.conv2d(bottom, weight, strides=[1, 1, 1, 1], padding='SAME')
 
 
-def batch_norm_layer(bottom, is_training, scope):
-    return tf.cond(is_training,
-                   lambda: tf.contrib.layers.batch_norm(bottom,
-                                                        is_training=True,
-                                                        center=False,
-                                                        updates_collections=None,
-                                                        scope=scope+"_bn",
-                                                        reuse=False),
-                   lambda: tf.contrib.layers.batch_norm(bottom,
-                                                        is_training=False,
-                                                        center=False,
-                                                        updates_collections=None,
-                                                        scope=scope+"_bn",
-                                                        reuse=True))
+def batch_norm_layer(bottom, scope):
+    return tf.contrib.layers.batch_norm(bottom,
+                                        center=False,
+                                        updates_collections=None,
+                                        scope=scope+"_bn")
 
 
-def conv_layer_with_bn(bottom=None, shape=None, is_training=True, name=None):
+def conv_layer_with_bn(bottom=None, shape=None, name=None):
     with tf.variable_scope(name) as scope:
         if shape:
             weight = get_conv_filter(name, shape)
@@ -99,7 +90,7 @@ def conv_layer_with_bn(bottom=None, shape=None, is_training=True, name=None):
             weight = load_conv_filter(name)
             bias = load_conv_bias(name)
         conv = tf.nn.bias_add(conv2d(bottom, weight), bias)
-        conv = tf.nn.relu(batch_norm_layer(conv, is_training, scope.name), name="relu")
+        conv = tf.nn.relu(batch_norm_layer(conv, scope.name), name="relu")
     activation_summary(conv)
     return conv
 
@@ -147,37 +138,36 @@ def max_unpool_with_argmax(bottom, mask, output_shape=None):
         return tf.scatter_nd(indices, values, output_shape)
 
 
-def inference(images, is_training):
-    training = tf.equal(is_training, tf.constant(True))
-    conv1_1 = conv_layer_with_bn(bottom=images, is_training=training, name="conv1_1")
-    conv1_2 = conv_layer_with_bn(bottom=conv1_1, is_training=training, name="conv1_2")
+def inference(images):
+    conv1_1 = conv_layer_with_bn(bottom=images, name="conv1_1")
+    conv1_2 = conv_layer_with_bn(bottom=conv1_1, name="conv1_2")
     pool1, pool1_indices = max_pool_with_argmax(conv1_2)
 
     print("pool1: ", pool1.shape)
 
-    conv2_1 = conv_layer_with_bn(bottom=pool1, is_training=training, name="conv2_1")
-    conv2_2 = conv_layer_with_bn(bottom=conv2_1, is_training=training, name="conv2_2")
+    conv2_1 = conv_layer_with_bn(bottom=pool1, name="conv2_1")
+    conv2_2 = conv_layer_with_bn(bottom=conv2_1, name="conv2_2")
     pool2, pool2_indices = max_pool_with_argmax(conv2_2)
 
     print("pool2: ", pool2.shape)
 
-    conv3_1 = conv_layer_with_bn(bottom=pool2, is_training=training, name="conv3_1")
-    conv3_2 = conv_layer_with_bn(bottom=conv3_1, is_training=training, name="conv3_2")
-    conv3_3 = conv_layer_with_bn(bottom=conv3_2, is_training=training, name="conv3_3")
+    conv3_1 = conv_layer_with_bn(bottom=pool2, name="conv3_1")
+    conv3_2 = conv_layer_with_bn(bottom=conv3_1, name="conv3_2")
+    conv3_3 = conv_layer_with_bn(bottom=conv3_2, name="conv3_3")
     pool3, pool3_indices = max_pool_with_argmax(conv3_3)
 
     print("pool3: ", pool3.shape)
 
-    conv4_1 = conv_layer_with_bn(bottom=pool3, is_training=training, name="conv4_1")
-    conv4_2 = conv_layer_with_bn(bottom=conv4_1, is_training=training, name="conv4_2")
-    conv4_3 = conv_layer_with_bn(bottom=conv4_2, is_training=training, name="conv4_3")
+    conv4_1 = conv_layer_with_bn(bottom=pool3, name="conv4_1")
+    conv4_2 = conv_layer_with_bn(bottom=conv4_1, name="conv4_2")
+    conv4_3 = conv_layer_with_bn(bottom=conv4_2, name="conv4_3")
     pool4, pool4_indices = max_pool_with_argmax(conv4_3)
 
     print("pool4: ", pool4.shape)
 
-    conv5_1 = conv_layer_with_bn(bottom=pool4, is_training=training, name="conv5_1")
-    conv5_2 = conv_layer_with_bn(bottom=conv5_1, is_training=training, name="conv5_2")
-    conv5_3 = conv_layer_with_bn(bottom=conv5_2, is_training=training, name="conv5_3")
+    conv5_1 = conv_layer_with_bn(bottom=pool4, name="conv5_1")
+    conv5_2 = conv_layer_with_bn(bottom=conv5_1, name="conv5_2")
+    conv5_3 = conv_layer_with_bn(bottom=conv5_2, name="conv5_3")
     pool5, pool5_indices = max_pool_with_argmax(conv5_3)
 
     print("pool5: ", pool5.shape)
@@ -190,7 +180,6 @@ def inference(images, is_training):
                                          output_shape=conv5_3.shape)
     up_conv5 = conv_layer_with_bn(bottom=up_sample_5,
                                   shape=[3, 3, 512, 512],
-                                  is_training=training,
                                   name="up_conv5")
 
     print("up_conv5: ", up_conv5.shape)
@@ -200,7 +189,6 @@ def inference(images, is_training):
                                          output_shape=conv4_3.shape)
     up_conv4 = conv_layer_with_bn(bottom=up_sample_4,
                                   shape=[3, 3, 512, 256],
-                                  is_training=training,
                                   name="up_conv4")
 
     print("up_conv4: ", up_conv4.shape)
@@ -210,7 +198,6 @@ def inference(images, is_training):
                                          output_shape=conv3_3.shape)
     up_conv3 = conv_layer_with_bn(bottom=up_sample_3,
                                   shape=[3, 3, 256, 128],
-                                  is_training=training,
                                   name="up_conv3")
 
     print("up_conv3: ", up_conv3.shape)
@@ -220,7 +207,6 @@ def inference(images, is_training):
                                          output_shape=conv2_2.shape)
     up_conv2 = conv_layer_with_bn(bottom=up_sample_2,
                                   shape=[3, 3, 128, 64],
-                                  is_training=training,
                                   name="up_conv2")
 
     print("up_conv2: ", up_conv2.shape)
@@ -230,7 +216,6 @@ def inference(images, is_training):
                                          output_shape=conv1_2.shape)
     logits = conv_layer_with_bn(bottom=up_sample_1,
                                 shape=[3, 3, 64, NUM_CLASSES],
-                                is_training=training,
                                 name="up_conv1")
 
     print("logits: ", logits.shape)

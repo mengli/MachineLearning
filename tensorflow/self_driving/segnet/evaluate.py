@@ -28,14 +28,6 @@ def color_image(image, num_classes):
     return cmap(norm(image))
 
 
-def save_output(prediction):
-    pred = tf.argmax(prediction[0], dimension=3).eval()
-    print(prediction[0][0][180][200])
-    print(pred[0][180][200])
-    for i in range(BATCH_SIZE):
-        up_color = color_image(pred[i], NUM_CLASSES)
-        misc.imsave('output/decision_%d.png' % i, up_color)
-
 def main(_):
     test_image_filenames, test_label_filenames = camvid.get_filename_list(test_dir)
 
@@ -56,7 +48,6 @@ def main(_):
             graph = tf.get_default_graph()
             train_data = graph.get_tensor_by_name("train_data:0")
             train_label = graph.get_tensor_by_name("train_labels:0")
-            is_training = graph.get_tensor_by_name("is_training:0")
             logits = tf.get_collection("logits")[0]
 
             # Start the queue runners.
@@ -67,13 +58,14 @@ def main(_):
                 image_batch ,label_batch = sess.run([images, labels])
                 feed_dict = {
                     train_data: image_batch,
-                    train_label: label_batch,
-                    is_training: True
+                    train_label: label_batch
                 }
                 prediction = sess.run([logits], feed_dict)
-                save_output(prediction)
-                for idx in range(BATCH_SIZE):
-                    misc.imsave('output/train_%d.png' % idx, image_batch[idx])
+                pred = tf.argmax(prediction[0], dimension=3).eval()
+                for batch in range(BATCH_SIZE):
+                    up_color = color_image(pred[batch], NUM_CLASSES)
+                    misc.imsave('output/decision_%d_%d.png' % (i, batch), up_color)
+                    misc.imsave('output/train_%d_%d.png' % (i, batch), image_batch[batch])
 
             coord.request_stop()
             coord.join(threads)

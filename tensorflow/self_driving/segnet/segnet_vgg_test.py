@@ -110,9 +110,8 @@ class PoolingTest(test.TestCase):
         config = tf.ConfigProto()
         config.gpu_options.allocator_type = 'BFC'
         train_data = tf.ones([10, 495, 289, 3], tf.float32)
-        is_training = True
         with self.test_session(use_gpu=True, config = config) as sess:
-            model_op = segnet_vgg.inference(train_data, is_training)
+            model_op = segnet_vgg.inference(train_data)
             sess.run(tf.global_variables_initializer())
             model_out = sess.run([model_op])
             self.assertEqual(np.array(model_out).shape, (1, 10, 495, 289, NUM_CLASSES))
