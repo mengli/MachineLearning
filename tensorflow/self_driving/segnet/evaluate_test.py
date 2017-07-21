@@ -43,15 +43,17 @@ class EvaluateTest(test.TestCase):
                         10.0, 11.0, 12.0, 13.0, 14.0, 16.0, 15.0, 17.0, 18.0]
         with self.test_session(use_gpu=False):
             t = constant_op.constant(tensor_input, shape=[3, 3, 1, 2])
-            print(t.eval())
             argmax_op = tf.argmax(t, dimension=3)
-            print(argmax_op.get_shape())
-            print(argmax_op.eval())
-            #up_color = evaluate.color_image(argmax_op.eval(), 1.)
-            #up_color = sess.run([up_color_op])
-            #print("AAA")
-            #print(up_color)
-            #self.assertAllEqual(up_color, [[[1, 1, 1], [0, 1, 1], [1, 0, 1]]])
+            up_color = evaluate.color_image(argmax_op.eval(), 1.)
+            self.assertAllClose(up_color, [[[[0.60000002, 0.60000002, 0.60000002, 1.]],
+                                            [[0.60000002, 0.60000002, 0.60000002, 1.]],
+                                            [[0.60000002, 0.60000002, 0.60000002, 1.]]],
+                                           [[[0.89411765, 0.10196079, 0.10980392, 1.]],
+                                            [[0.60000002, 0.60000002, 0.60000002, 1.]],
+                                            [[0.60000002, 0.60000002, 0.60000002, 1.]]],
+                                           [[[0.60000002, 0.60000002, 0.60000002, 1.]],
+                                            [[0.89411765, 0.10196079, 0.10980392, 1.]],
+                                            [[0.60000002, 0.60000002, 0.60000002, 1.]]]])
 
 
 if __name__ == "__main__":

@@ -4,10 +4,9 @@ from __future__ import print_function
 
 from tensorflow.python.framework import constant_op
 from tensorflow.python.platform import test
+from self_driving.segnet import segnet_vgg
 import tensorflow as tf
 import numpy as np
-
-import segnet_vgg
 
 NUM_CLASSES = 11
 
