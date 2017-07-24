@@ -102,6 +102,7 @@ def export_animation(anim_frames):
 
 # Generate mp4 from images:
 # avconv -r 10 -i frame_%d.png -b:v 1000k gan.mp4
+# convert -delay 20 -loop 0 output/decision_*.png myimage.gif
 
 def train(_):
     anim_frames = []

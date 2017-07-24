@@ -1,25 +1,25 @@
-"""Train SegNet with camvid dataset.
+"""Train SegNet with KITTI dataset.
 
-nohup python -u -m self_driving.segnet.train > self_driving/segnet/output.txt 2>&1 &
+nohup python -u -m self_driving.segnet.train_kitti > self_driving/segnet/output.txt 2>&1 &
 
 """
 
 import os
 import tensorflow as tf
-from utils import camvid
+from utils import kitti_segnet
 import segnet_vgg
 
 LOG_DIR = 'save'
 EPOCH = 4000
-BATCH_SIZE = 8
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+BATCH_SIZE = 1
+IMAGE_HEIGHT = 375
+IMAGE_WIDTH = 1242
 IMAGE_CHANNEL = 3
-NUM_CLASSES = 12
+NUM_CLASSES = 3
 INITIAL_LEARNING_RATE = 0.0001
 
-image_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/train.txt"
-val_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/val.txt"
+image_dir = "/usr/local/google/home/limeng/Downloads/kitti/data_road/training/train.txt"
+val_dir = "/usr/local/google/home/limeng/Downloads/kitti/data_road/training/train.txt"
 
 
 def loss(logits, labels):
@@ -43,8 +43,8 @@ def train(total_loss):
 
 
 def main(_):
-    image_filenames, label_filenames = camvid.get_filename_list(image_dir)
-    val_image_filenames, val_label_filenames = camvid.get_filename_list(val_dir)
+    image_filenames, label_filenames = kitti_segnet.get_filename_list(image_dir)
+    val_image_filenames, val_label_filenames = kitti_segnet.get_filename_list(val_dir)
 
     with tf.Graph().as_default():
         with tf.device('/cpu:0'):
@@ -63,12 +63,12 @@ def main(_):
                                           shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1],
                                           name='train_labels')
 
-            images, labels = camvid.CamVidInputs(image_filenames,
-                                                 label_filenames,
-                                                 BATCH_SIZE)
-            val_images, val_labels = camvid.CamVidInputs(val_image_filenames,
-                                                         val_label_filenames,
-                                                         BATCH_SIZE)
+            images, labels = kitti_segnet.CamVidInputs(image_filenames,
+                                                       label_filenames,
+                                                       BATCH_SIZE)
+            val_images, val_labels = kitti_segnet.CamVidInputs(val_image_filenames,
+                                                               val_label_filenames,
+                                                               BATCH_SIZE)
 
             logits = segnet_vgg.inference(train_data, NUM_CLASSES)
             total_loss = loss(logits, train_labels)

@@ -6,7 +6,6 @@ import numpy as np
 import tensorflow as tf
 
 VGG16_NPY_PATH = 'vgg16.npy'
-NUM_CLASSES = 12
 WD = 5e-4
 
 data_dict = np.load(VGG16_NPY_PATH, encoding='latin1').item()
@@ -138,7 +137,7 @@ def max_unpool_with_argmax(bottom, mask, output_shape=None):
         return tf.scatter_nd(indices, values, output_shape)
 
 
-def inference(images):
+def inference(images, num_classes):
     conv1_1 = conv_layer_with_bn(bottom=images, name="conv1_1")
     conv1_2 = conv_layer_with_bn(bottom=conv1_1, name="conv1_2")
     pool1, pool1_indices = max_pool_with_argmax(conv1_2)
@@ -215,7 +214,7 @@ def inference(images):
                                          pool1_indices,
                                          output_shape=conv1_2.shape)
     logits = conv_layer_with_bn(bottom=up_sample_1,
-                                shape=[3, 3, 64, NUM_CLASSES],
+                                shape=[3, 3, 64, num_classes],
                                 name="up_conv1")
 
     print("logits: ", logits.shape)

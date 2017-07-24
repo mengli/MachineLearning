@@ -4,7 +4,6 @@ import tensorflow as tf
 import scipy as scp
 import scipy.misc
 
-
 KITTI_TRAIN_DIR_PREFIX = '/usr/local/google/home/limeng/Downloads/kitti/data_road/training/image_2/'
 KITTI_GT_DIR_PREFIX = '/usr/local/google/home/limeng/Downloads/kitti/data_road/training/gt_image_2/'
 
@@ -25,7 +24,10 @@ class Kitti(object):
         self._file_count = 0
         self._read_datasets()
 
-    def _read_datasets(self, train_data_dir=KITTI_TRAIN_DIR_PREFIX, gt_data_dir=KITTI_GT_DIR_PREFIX, cat='uu'):
+    def _read_datasets(self,
+                       train_data_dir=KITTI_TRAIN_DIR_PREFIX,
+                       gt_data_dir=KITTI_GT_DIR_PREFIX,
+                       cat='uu'):
         assert os.path.isdir(train_data_dir), 'Cannot find: %s' % train_data_dir
 
         self._file_count = 98

@@ -1,25 +1,24 @@
 """Evaluate SegNet.
 
-nohup python -u -m self_driving.segnet.evaluate > self_driving/segnet/output.txt 2>&1 &
+nohup python -u -m self_driving.segnet.evaluate_kitti > self_driving/segnet/output.txt 2>&1 &
 
 """
 
 import os
 import tensorflow as tf
-from utils import camvid
+from utils import kitti_segnet
 from scipy import misc
 import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 
 LOG_DIR = 'save'
-BATCH_SIZE = 8
-EPOCH = 29
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
-IMAGE_CHANNEL = 3
-NUM_CLASSES = 12
+EPOCH = 237
+BATCH_SIZE = 1
+IMAGE_HEIGHT = 375
+IMAGE_WIDTH = 1242
+NUM_CLASSES = 3
 
-test_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/test.txt"
+test_dir = "/usr/local/google/home/limeng/Downloads/kitti/data_road/training/train.txt"
 
 
 def color_image(image, num_classes):
@@ -29,7 +28,7 @@ def color_image(image, num_classes):
 
 
 def main(_):
-    test_image_filenames, test_label_filenames = camvid.get_filename_list(test_dir)
+    test_image_filenames, test_label_filenames = kitti_segnet.get_filename_list(test_dir)
     index = 0
 
     with tf.Graph().as_default():
@@ -38,10 +37,10 @@ def main(_):
             config.gpu_options.allocator_type = 'BFC'
             sess = tf.InteractiveSession(config=config)
 
-            images, labels = camvid.CamVidInputs(test_image_filenames,
-                                                 test_label_filenames,
-                                                 BATCH_SIZE,
-                                                 shuffle=False)
+            images, labels = kitti_segnet.CamVidInputs(test_image_filenames,
+                                                       test_label_filenames,
+                                                       BATCH_SIZE,
+                                                       shuffle=False)
 
             saver = tf.train.import_meta_graph(os.path.join(LOG_DIR, "segnet.ckpt.meta"))
             saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
@@ -65,8 +64,8 @@ def main(_):
                 pred = tf.argmax(prediction[0], dimension=3).eval()
                 for batch in range(BATCH_SIZE):
                     up_color = color_image(pred[batch], NUM_CLASSES)
-                    misc.imsave('output/decision_%d.png' % index, up_color)
-                    misc.imsave('output/train_%d.png' % index, image_batch[batch])
+                    misc.imsave('output/segnet_kitti/decision_%d.png' % index, up_color)
+                    misc.imsave('output/segnet_kitti/train_%d.png' % index, image_batch[batch])
                     index += 1
 
             coord.request_stop()
