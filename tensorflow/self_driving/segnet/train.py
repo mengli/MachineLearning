@@ -10,16 +10,16 @@ from utils import camvid
 import segnet_vgg
 
 LOG_DIR = 'save'
-EPOCH = 4000
-BATCH_SIZE = 8
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+EPOCH = 6000
+BATCH_SIZE = 4
+IMAGE_HEIGHT = 720
+IMAGE_WIDTH = 960
 IMAGE_CHANNEL = 3
-NUM_CLASSES = 12
+NUM_CLASSES = 32
 INITIAL_LEARNING_RATE = 0.0001
 
-image_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/train.txt"
-val_dir = "/usr/local/google/home/limeng/Downloads/camvid/data/val.txt"
+image_dir = "/usr/local/google/home/limeng/Downloads/camvid/train.txt"
+val_dir = "/usr/local/google/home/limeng/Downloads/camvid/val.txt"
 
 
 def loss(logits, labels):
@@ -34,12 +34,14 @@ def loss(logits, labels):
 
 
 def train(total_loss):
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-    learning_rate = tf.train.exponential_decay(
-        INITIAL_LEARNING_RATE, global_step, EPOCH * 0.2, 0.9, staircase=True)
-    tf.summary.scalar('total_loss', total_loss)
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    return optimizer.minimize(total_loss, global_step=global_step)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        learning_rate = tf.train.exponential_decay(
+            INITIAL_LEARNING_RATE, global_step, EPOCH * 0.2, 0.9, staircase=True)
+        tf.summary.scalar('total_loss', total_loss)
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        return optimizer.minimize(total_loss, global_step=global_step)
 
 
 def main(_):
@@ -62,6 +64,7 @@ def main(_):
             train_labels = tf.placeholder(tf.int64,
                                           shape=[BATCH_SIZE, IMAGE_HEIGHT, IMAGE_WIDTH, 1],
                                           name='train_labels')
+            is_training = tf.placeholder(tf.bool, name='is_training')
 
             images, labels = camvid.CamVidInputs(image_filenames,
                                                  label_filenames,
@@ -70,7 +73,7 @@ def main(_):
                                                          val_label_filenames,
                                                          BATCH_SIZE)
 
-            logits = segnet_vgg.inference(train_data, NUM_CLASSES)
+            logits = segnet_vgg.inference(train_data, is_training, NUM_CLASSES)
             total_loss = loss(logits, train_labels)
             train_op = train(total_loss)
             check_op = tf.add_check_numerics_ops()
@@ -92,7 +95,8 @@ def main(_):
                 image_batch, label_batch = sess.run([images, labels])
                 feed_dict = {
                     train_data: image_batch,
-                    train_labels: label_batch
+                    train_labels: label_batch,
+                    is_training: True
                 }
                 _, _, _, summary = sess.run([train_op, total_loss, check_op, merged_summary_op],
                                             feed_dict=feed_dict)
@@ -100,7 +104,8 @@ def main(_):
                     print("Start validating...")
                     val_images_batch, val_labels_batch = sess.run([val_images, val_labels])
                     loss_value = total_loss.eval(feed_dict={train_data: val_images_batch,
-                                                            train_labels: val_labels_batch})
+                                                            train_labels: val_labels_batch,
+                                                            is_training: True})
                     print("Epoch: %d, Loss: %g" % (i, loss_value))
                     saver.save(sess, checkpoint_path)
                 # write logs at every iteration

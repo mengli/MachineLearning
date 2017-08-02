@@ -16,9 +16,9 @@ EPOCH = 237
 BATCH_SIZE = 1
 IMAGE_HEIGHT = 375
 IMAGE_WIDTH = 1242
-NUM_CLASSES = 3
+NUM_CLASSES = 2
 
-test_dir = "/usr/local/google/home/limeng/Downloads/kitti/data_road/training/train.txt"
+test_dir = "/usr/local/google/home/limeng/Downloads/kitti/data_road/testing/test.txt"
 
 
 def color_image(image, num_classes):
@@ -48,6 +48,7 @@ def main(_):
             graph = tf.get_default_graph()
             train_data = graph.get_tensor_by_name("train_data:0")
             train_label = graph.get_tensor_by_name("train_labels:0")
+            is_training = graph.get_tensor_by_name("is_training:0")
             logits = tf.get_collection("logits")[0]
 
             # Start the queue runners.
@@ -58,7 +59,8 @@ def main(_):
                 image_batch, label_batch = sess.run([images, labels])
                 feed_dict = {
                     train_data: image_batch,
-                    train_label: label_batch
+                    train_label: label_batch,
+                    is_training: False
                 }
                 prediction = sess.run([logits], feed_dict)
                 pred = tf.argmax(prediction[0], dimension=3).eval()

@@ -2,14 +2,14 @@ import tensorflow as tf
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import dtypes
 
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
+IMAGE_HEIGHT = 720
+IMAGE_WIDTH = 960
 IMAGE_DEPTH = 3
 
-NUM_CLASSES = 11
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 367
-NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 101
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
+NUM_CLASSES = 32
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 580
+NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 580
+NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 580
 
 def _generate_image_and_label_batch(image, label, min_queue_examples,
                                     batch_size, shuffle):
