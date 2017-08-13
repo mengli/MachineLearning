@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#result_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_camvid"
-#output_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_camvid/result"
+result_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_camvid"
+output_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_camvid/result"
 
-result_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_kitti"
-output_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_kitti/result"
+#result_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_kitti"
+#output_dir="/usr/local/google/home/limeng/githome/tensorflow/output/segnet_kitti/result"
 
 echo "Merge output"
 
