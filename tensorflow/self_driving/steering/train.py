@@ -17,7 +17,7 @@ def loss(pred, labels):
     norm = tf.add_n([tf.nn.l2_loss(v) for v in train_vars])
     # create a summary to monitor L2 norm
     tf.summary.scalar('L2 Normalization', norm)
-    losses = tf.reduce_mean(tf.square(tf.subtract(pred, labels)))
+    losses = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(pred, labels))))
     # create a summary to monitor loss
     tf.summary.scalar('Loss', losses)
     return norm, losses, losses + norm * 0.00001
@@ -63,11 +63,11 @@ def main(_):
                 xs, ys = udacity_data.load_train_batch(BATCH_SIZE)
 
                 _, summary = sess.run([train_op, merged_summary_op],
-                                      feed_dict={x_image: xs, y_label: ys, keep_prob: 0.6})
+                                      feed_dict={x_image: xs, y_label: ys, keep_prob: 0.7})
 
                 if i % 10 == 0:
                     xs, ys = udacity_data.load_val_batch(BATCH_SIZE)
-                    loss_value = losses.eval(feed_dict={x_image: xs, y_label: ys, keep_prob: 0.6})
+                    loss_value = losses.eval(feed_dict={x_image: xs, y_label: ys, keep_prob: 1.0})
                     print("Epoch: %d, Step: %d, Loss: %g" % (epoch, steps, loss_value))
 
                 # write logs at every iteration
