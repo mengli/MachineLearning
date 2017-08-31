@@ -89,7 +89,6 @@ def inference(x_image, keep_prob, is_training=True):
     b_fc5 = bias_variable([1])
 
     y = tf.multiply(tf.atan(tf.matmul(h_fc4_drop, W_fc5) + b_fc5), 2) #scale the atan output
-    #y = tf.matmul(h_fc4_drop, W_fc5) + b_fc5
     tf.add_to_collection("logits", y)
 
     return y

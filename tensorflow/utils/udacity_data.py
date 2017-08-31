@@ -66,10 +66,8 @@ def load_train_batch(batch_size):
     x_out = []
     y_out = []
     for i in range(0, batch_size):
-        x_out.append(
-            scipy.misc.imresize(
-            scipy.misc.imread(
-                train_xs[(train_batch_pointer + i) % NUM_TRAIN_IMAGES], mode="RGB"), [66, 200]) / 255.0)
+        image = scipy.misc.imread(train_xs[(train_batch_pointer + i) % NUM_TRAIN_IMAGES], mode="RGB")
+        x_out.append(scipy.misc.imresize(image[-300:], [66, 200]) / 255.0)
         y_out.append([train_ys[(train_batch_pointer + i) % NUM_TRAIN_IMAGES]])
     train_batch_pointer += batch_size
     return x_out, y_out
@@ -83,11 +81,8 @@ def load_val_batch(batch_size):
     x_out = []
     y_out = []
     for i in range(0, batch_size):
-        x_out.append(
-            scipy.misc.imresize(
-            scipy.misc.imread(
-                val_xs[(val_batch_pointer + i) % NUM_VAL_IMAGES], mode="RGB"), [66, 200]) / 255.0)
-        #print(val_ys)
+        image = scipy.misc.imread(val_xs[(val_batch_pointer + i) % NUM_VAL_IMAGES], mode="RGB")
+        x_out.append(scipy.misc.imresize(image[-300:], [66, 200]) / 255.0)
         y_out.append([val_ys[(val_batch_pointer + i) % NUM_VAL_IMAGES]])
     val_batch_pointer += batch_size
     return x_out, y_out

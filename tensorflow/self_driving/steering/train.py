@@ -6,9 +6,9 @@ from utils import udacity_data
 import model
 
 LOG_DIR = 'save'
-EPOCH = 100
+EPOCH = 32
 BATCH_SIZE = 128
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 STEP_PER_EPOCH = udacity_data.NUM_TRAIN_IMAGES / BATCH_SIZE
 
 
@@ -20,7 +20,7 @@ def loss(pred, labels):
     losses = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(pred, labels))))
     # create a summary to monitor loss
     tf.summary.scalar('Loss', losses)
-    return norm, losses, losses + norm * 0.00001
+    return norm, losses, losses + norm * 0.0005
 
 
 def train(total_loss):
