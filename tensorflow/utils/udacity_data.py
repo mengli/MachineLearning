@@ -50,9 +50,15 @@ def read_data(shuffe=True):
     c = list(zip(train_xs, train_ys))
     if shuffe:
         random.shuffle(c)
+    # with open("train.txt", 'a') as out:
+    #     for item in c:
+    #         out.write("%s %.10f\n" % (item[0], item[1]))
     train_xs, train_ys = zip(*c)
     #shuffle val set
     c = list(zip(val_xs, val_ys))
+    # with open("val.txt", 'a') as out:
+    #     for item in c:
+    #         out.write("%s %.10f\n" % (item[0], item[1]))
     if shuffe:
         random.shuffle(c)
     val_xs, val_ys = zip(*c)
