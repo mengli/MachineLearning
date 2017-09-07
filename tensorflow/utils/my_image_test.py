@@ -9,9 +9,12 @@ class MyImageTest(test.TestCase):
 
     def testReadData(self):
         myImageDataGenerator = my_image.MyImageDataGenerator()
-        generator = myImageDataGenerator.flow("udacity_train.txt", [480, 640, 3], shuffle=False, save_to_dir='test')
+        generator = myImageDataGenerator.flow("udacity_train.txt",
+                                              [224, 224, 3],
+                                              shuffle=False,
+                                              save_to_dir='test')
         images, labels = generator.next()
-        self.assertAllEqual(images.shape, [32, 480, 640, 3])
+        self.assertAllEqual(images.shape, [32, 224, 224, 3])
         self.assertAllEqual(labels.shape, [32])
         self.assertAllClose(labels[0], 0.0490969472)
 

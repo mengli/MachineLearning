@@ -81,6 +81,7 @@ class FileIterator(Iterator):
         batch_x = np.zeros(tuple([current_batch_size] + list(self.image_size)), dtype=K.floatx())
         for i, j in enumerate(index_array):
             x = scipy.misc.imread(self.x[j])
+            x = scipy.misc.imresize(x, self.image_size)
             x = self.image_data_generator.random_transform(x.astype(K.floatx()))
             x = self.image_data_generator.standardize(x)
             batch_x[i] = x
