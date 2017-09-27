@@ -3,6 +3,8 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import preprocessing
 from sklearn import linear_model
+from sklearn.learning_curve import learning_curve
+import matplotlib.pyplot as plt
 
 
 def set_missing_ages(df):
@@ -27,6 +29,43 @@ def binarize_column(df, column_name):
     df.loc[(df.Cabin.isnull()), column_name] = 'No'
     df.loc[(df.Cabin.notnull()), column_name] = 'Yes'
     return df
+
+
+def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None, n_jobs=1,
+                        train_sizes=np.linspace(.05, 1., 20), verbose=0, plot=True):
+    train_sizes, train_scores, test_scores = learning_curve(
+        estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, verbose=verbose)
+
+    train_scores_mean = np.mean(train_scores, axis=1)
+    train_scores_std = np.std(train_scores, axis=1)
+    test_scores_mean = np.mean(test_scores, axis=1)
+    test_scores_std = np.std(test_scores, axis=1)
+
+    if plot:
+        plt.figure()
+        plt.title(title)
+        if ylim is not None:
+            plt.ylim(*ylim)
+        plt.xlabel("Train set count")
+        plt.ylabel("Score")
+        plt.grid()
+
+        plt.fill_between(train_sizes,
+                         train_scores_mean - train_scores_std,
+                         train_scores_mean + train_scores_std,
+                         alpha=0.1, color="b")
+        plt.fill_between(train_sizes,
+                         test_scores_mean - test_scores_std,
+                         test_scores_mean + test_scores_std,
+                         alpha=0.1, color="r")
+        plt.plot(train_sizes, train_scores_mean, 'o-', color="b", label="Train score")
+        plt.plot(train_sizes, test_scores_mean, 'o-', color="r", label="Val score")
+
+        plt.legend(loc="best")
+
+        plt.draw()
+        plt.show()
+        plt.gca().invert_yaxis()
 
 
 data_train = pd.read_csv("/usr/local/google/home/limeng/Downloads/kaggle/titanic/train.csv")
@@ -61,6 +100,8 @@ X = train_np[:, 1:]
 
 clf = linear_model.LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
 clf.fit(X, y)
+
+plot_learning_curve(clf, "Learning curve", X, y)
 
 data_test = pd.read_csv("/usr/local/google/home/limeng/Downloads/kaggle/titanic/test.csv")
 data_test.loc[(data_test.Fare.isnull()), 'Fare'] = 0
