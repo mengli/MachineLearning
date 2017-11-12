@@ -1,166 +1,139 @@
-"""A Variational Autoencoders for CIFAR-10.
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+"""A Variational Autoencoders for MNIST.
 """
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import sys
+from keras.layers import Input, Dense, Lambda, Conv2D, Conv2DTranspose, \
+    Flatten, Reshape
+from keras.models import Model
+from keras import backend as K
+from keras.datasets import mnist
+from keras import metrics
 import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
-from utils.utils import put_kernels_on_grid
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
 
-EPOCH = 5000
+EPOCH = 5
+INPUT_DIM = 784
 BATCH_SIZE = 64
-LATENT_VAR_NUM = 128
-FLAGS = None
+HIDDEN_VAR_DIM = 7 * 7 * 32
+LATENT_VAR_DIM = 2
+
+# input image dimensions
+
+(img_rows, img_cols, img_chns) = (28, 28, 1)
+
+if K.image_data_format() == 'channels_first':
+    original_img_size = (img_chns, img_rows, img_cols)
+    output_shape = (BATCH_SIZE, 32, 7, 7)
+else:
+    original_img_size = (img_rows, img_cols, img_chns)
+    output_shape = (BATCH_SIZE, 7, 7, 32)
 
 
-def weight_variable(shape, name):
-    initial = tf.truncated_normal(shape, name=name, stddev=0.02, dtype=tf.float32)
-    return tf.Variable(initial, name)
+def sampling(args):
+    (z_mean, z_var) = args
+    epsilon = K.random_normal(shape=(K.shape(z_mean)[0],
+                              LATENT_VAR_DIM), mean=0., stddev=1.)
+    return z_mean + z_var * epsilon
 
 
-def bias_variable(shape, name):
-    initial = tf.constant(0.0, shape=shape, name=name, dtype=tf.float32)
-    return tf.Variable(initial, name)
+def encode(x):
+    input_reshape = Reshape(original_img_size)(x)
+    conv1 = Conv2D(16, 5, strides=(2, 2), padding='same',
+                   activation='relu')(input_reshape)
+    conv2 = Conv2D(32, 5, strides=(2, 2), padding='same',
+                   activation='relu')(conv1)
+    hidden = Flatten()(conv2)
+    z_mean = Dense(LATENT_VAR_DIM, activation='relu')(hidden)
+    z_var = Dense(LATENT_VAR_DIM, activation='relu')(hidden)
+    return (z_mean, z_var)
 
 
-def conv2d(x, W):
-    return tf.nn.conv2d(x, W, strides=[1, 2, 2, 1], padding='SAME')
-
-
-def conv_layer(layer_name, input, in_dim, in_ch, out_dim):
-    with tf.name_scope(layer_name):
-        W_conv = weight_variable([in_dim, in_dim, in_ch, out_dim], "weights")
-        b_conv = bias_variable([out_dim], "bias")
-        tf.summary.histogram("weights", W_conv)
-        tf.summary.histogram("biases", b_conv)
-        activation = tf.nn.bias_add(conv2d(input, W_conv), b_conv)
-        return lrelu(activation)
-
-
-def conv_transpose(layer_name, x, in_ch, out_dim, output_shape):
-    with tf.variable_scope(layer_name):
-        W_conv = weight_variable([5, 5, out_dim, in_ch], "weights")
-        return tf.nn.conv2d_transpose(x, W_conv, output_shape=output_shape, strides=[1, 2, 2, 1], padding="SAME")
-
-
-def fc_layer(layer_name, input, in_dim, out_dim):
-    with tf.name_scope(layer_name):
-        W_fc = weight_variable([in_dim, out_dim], "weights")
-        b_fc = bias_variable([out_dim], "bias")
-        return tf.nn.bias_add(tf.matmul(input, W_fc), b_fc)
-
-# leaky reLu unit
-def lrelu(x, leak=0.2, name="lrelu"):
-    with tf.variable_scope(name):
-        f1 = 0.5 * (1 + leak)
-        f2 = 0.5 * (1 - leak)
-        return f1 * x + f2 * abs(x)
-
-
-# encoder
-def recognition(input_images):
-    with tf.variable_scope("recognition"):
-        conv1 = conv_layer("conv_layer1", input_images, 5, 1, 16)
-        conv2 = conv_layer("conv_layer2", conv1, 5, 16, 32)
-
-        conv2_flat = tf.reshape(conv2, [-1, 7 * 7 * 32])
-        tf.summary.histogram("conv2_flat", conv2_flat)
-
-        z_mean = fc_layer("w_mean", conv2_flat, 7 * 7 * 32, LATENT_VAR_NUM)
-        z_stddev = fc_layer("w_stddev", conv2_flat, 7 * 7 * 32, LATENT_VAR_NUM)
-
-        tf.summary.histogram("z_mean", z_mean)
-        tf.summary.histogram("z_stddev", z_stddev)
-
-        return z_mean, z_stddev
-
-# decoder
-def generation(z):
-    with tf.variable_scope("generation"):
-        z_develop = fc_layer('z_matrix', z, LATENT_VAR_NUM, 7 * 7 * 32)
-        z_matrix = tf.nn.relu(tf.reshape(z_develop, [BATCH_SIZE, 7, 7, 32]))
-        tf.summary.histogram('z_matrix', z_matrix)
-        h1 = tf.nn.relu(conv_transpose("g_h1", z_matrix, 32, 16, [BATCH_SIZE, 14, 14, 16]))
-        tf.summary.histogram('h1', h1)
-        h2 = tf.nn.sigmoid(conv_transpose("g_h2", h1, 16, 1, [BATCH_SIZE, 28, 28, 1]))
-        tf.summary.histogram('h2', h2)
-
-        kernel_grad_grid = put_kernels_on_grid(tf.transpose(h2, [1, 2, 3, 0]), (8, 8))
-        tf.summary.image("gen_images", kernel_grad_grid, max_outputs=1)
-
-        return h2
-
-
-def learning_rate(global_step):
-    starter_learning_rate = 0.001
-    learning_rate_1 = tf.train.exponential_decay(
-        starter_learning_rate, global_step, EPOCH * 0.2, 0.1, staircase=True)
-    learning_rate_2 = tf.train.exponential_decay(
-        learning_rate_1, global_step, EPOCH * 0.4, 0.5, staircase=True)
-    decayed_learning_rate = tf.train.exponential_decay(
-        learning_rate_2, global_step, EPOCH * 0.6, 0.8, staircase=True)
-    tf.summary.scalar('learning_rate', decayed_learning_rate)
-    return decayed_learning_rate
+def decode(z):
+    hidden = Dense(HIDDEN_VAR_DIM, activation='relu')(z)
+    hidden_reshape = Reshape(output_shape[1:])(hidden)
+    deconv1 = Conv2DTranspose(16, 5, strides=(2, 2), padding='same',
+                              activation='relu')(hidden_reshape)
+    deconv2 = Conv2DTranspose(1, 5, strides=(2, 2), padding='same',
+                              activation='sigmoid')(deconv1)
+    return Flatten()(deconv2)
 
 
 def main(_):
-    mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
+    x = Input(shape=(INPUT_DIM, ))
+    (z_mean, z_var) = encode(x)
+    z = Lambda(sampling)([z_mean, z_var])
+    x_decoded = decode(z)
+    model = Model(inputs=x, outputs=x_decoded)
 
-    # Create the model
-    x = tf.placeholder(tf.float32, [None, 784])
+    def vae_loss(y_true, y_pred):
+        generation_loss = img_rows * img_cols \
+            * metrics.binary_crossentropy(x, x_decoded)
+        kl_loss = 0.5 * tf.reduce_sum(K.square(z_mean)
+                + K.square(z_var) - K.log(K.square(z_var + 1e-8)) - 1,
+                axis=1)
+        return tf.reduce_mean(generation_loss + kl_loss)
 
-    x_image = tf.reshape(x, [-1, 28, 28, 1])
+    model.compile(optimizer='rmsprop', loss=vae_loss)
 
-    image_grid = put_kernels_on_grid(tf.transpose(x_image, [1, 2, 3, 0]), (8, 8))
-    tf.summary.image("images", image_grid, max_outputs=1)
+    # train the VAE on MNIST digits
 
-    z_mean, z_stddev = recognition(x_image)
+    ((x_train, y_train), (x_test, y_test)) = mnist.load_data()
 
-    samples = tf.random_normal([BATCH_SIZE, LATENT_VAR_NUM], 0, 1, dtype=tf.float32)
-    guessed_z = tf.add(tf.multiply(samples, z_stddev), z_mean)
+    x_train = x_train.astype('float32') / 255.
+    x_test = x_test.astype('float32') / 255.
+    x_train = x_train.reshape((len(x_train),
+                              np.prod(x_train.shape[1:])))
+    x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
 
-    generated_images = generation(guessed_z)
+    print(model.summary())
 
-    generated_flat = tf.reshape(generated_images, [BATCH_SIZE, 28 * 28 * 1])
-    tf.summary.histogram('generated_flat', generated_flat)
+    model.fit(
+        x_train,
+        y_train,
+        shuffle=True,
+        epochs=EPOCH,
+        batch_size=BATCH_SIZE,
+        validation_data=(x_test, y_test),
+        )
 
-    generation_loss = -tf.reduce_sum(
-        x * tf.log(1e-8 + generated_flat) + (1 - x) * tf.log(1e-8 + 1 - generated_flat), 1)
-    tf.summary.histogram('generation_loss', generation_loss)
+    generator = K.function([model.layers[8].input],
+                           [model.layers[12].output])
 
-    latent_loss = 0.5 * tf.reduce_sum(tf.square(z_mean) + tf.square(z_stddev) - tf.log(tf.square(z_stddev)) - 1, 1)
+    # display a 2D manifold of the digits
 
-    cost = tf.reduce_mean(generation_loss + latent_loss)
-    tf.summary.scalar('loss', cost)
+    n = 15  # figure with 15x15 digits
+    digit_size = 28
+    figure = np.zeros((digit_size * n, digit_size * n))
 
-    global_step = tf.Variable(0, trainable=False)
-    lr = learning_rate(global_step)
+    # linearly spaced coordinates on the unit square were transformed through the inverse CDF (ppf) of the Gaussian
+    # to produce values of the latent variables z, since the prior of the latent space is Gaussian
 
-    train_step = tf.train.AdamOptimizer(lr).minimize(cost)
+    grid_x = norm.ppf(np.linspace(0.05, 0.95, n))
+    grid_y = norm.ppf(np.linspace(0.05, 0.95, n))
 
-    sess = tf.InteractiveSession()
+    for (i, yi) in enumerate(grid_x):
+        for (j, xi) in enumerate(grid_y):
+            z_sample = np.array([[xi, yi]])
+            z_sample = np.tile(z_sample,
+                               BATCH_SIZE).reshape(BATCH_SIZE, 2)
+            x_decoded = generator([z_sample])[0]
+            digit = x_decoded[0].reshape(digit_size, digit_size)
 
-    merged = tf.summary.merge_all()
-    train_writer = tf.summary.FileWriter('train', sess.graph)
+            figure[i * digit_size:(i + 1) * digit_size, j * digit_size:
+                   (j + 1) * digit_size] = digit
 
-    sess.run(tf.global_variables_initializer())
-
-    for i in range(EPOCH):
-        batch = mnist.train.next_batch(BATCH_SIZE)
-        if i % 100 == 0:
-            print("step %d" % i)
-        summary, _ = sess.run([merged, train_step], feed_dict={x: batch[0]})
-        train_writer.add_summary(summary, i)
-
-    print("Done")
+    plt.figure(figsize=(10, 10))
+    plt.imshow(figure, cmap='Greys_r')
+    plt.show()
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',
-                        help='Directory for storing input data')
-    FLAGS, unparsed = parser.parse_known_args()
-    tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+    tf.app.run(main=main)
