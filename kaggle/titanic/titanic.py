@@ -1,136 +1,293 @@
+# remove warnings
+import warnings
 import pandas as pd
+#from matplotlib import pyplot as plt
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn import preprocessing
-from sklearn import linear_model
-from sklearn.learning_curve import learning_curve
-import matplotlib.pyplot as plt
+
+from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import SelectKBest
+from sklearn.cross_validation import StratifiedKFold
+from sklearn.grid_search import GridSearchCV
+from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
+from sklearn.cross_validation import cross_val_score
+
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.feature_selection import SelectFromModel
+
+warnings.filterwarnings('ignore')
+pd.options.display.max_rows = 100
+
+def get_combined_data():
+    # reading train data
+    train = pd.read_csv('/usr/local/google/home/limeng/Downloads/kaggle/titanic/train.csv')
+
+    # reading test data
+    test = pd.read_csv('/usr/local/google/home/limeng/Downloads/kaggle/titanic/test.csv')
+
+    # extracting and then removing the targets from the training data
+    targets = train.Survived
+    train.drop('Survived',1,inplace=True)
 
 
-def set_missing_ages(df):
-    train_input = df[['Age', 'Fare', 'Parch', 'SibSp', 'Pclass']]
+    # merging train data and test data for future feature engineering
+    combined = train.append(test)
+    combined.reset_index(inplace=True)
+    combined.drop('index',inplace=True,axis=1)
 
-    has_age = train_input[pd.notnull(train_input.Age)].as_matrix()
-    no_age = train_input[pd.isnull(train_input.Age)].as_matrix()
-
-    y = has_age[:, 0]
-    X = has_age[:, 1:]
-
-    rfr = RandomForestRegressor(random_state=0, n_estimators=2000, n_jobs=-1)
-    rfr.fit(X, y)
-
-    predicted_age = rfr.predict(no_age[:, 1:])
-    df.loc[(df.Age.isnull()), 'Age'] = predicted_age
-
-    return df, rfr
+    return combined, targets
 
 
-def binarize_column(df, column_name):
-    df.loc[(df.Cabin.isnull()), column_name] = 'No'
-    df.loc[(df.Cabin.notnull()), column_name] = 'Yes'
-    return df
+def create_titles(combined):
+    # we extract the title from each name
+    combined['Title'] = combined['Name'].map(lambda name:name.split(',')[1].split('.')[0].strip())
+
+    # a map of more aggregated titles
+    Title_Dictionary = {
+        "Capt":         "Officer",
+        "Col":          "Officer",
+        "Major":        "Officer",
+        "Jonkheer":     "Royalty",
+        "Don":          "Royalty",
+        "Sir" :         "Royalty",
+        "Dr":           "Officer",
+        "Rev":          "Officer",
+        "the Countess": "Royalty",
+        "Dona":         "Royalty",
+        "Mme":          "Mrs",
+        "Mlle":         "Miss",
+        "Ms":           "Mrs",
+        "Mr" :          "Mr",
+        "Mrs" :         "Mrs",
+        "Miss" :        "Miss",
+        "Master" :      "Master",
+        "Lady" :        "Royalty"
+    }
+
+    # we map each title
+    combined['Title'] = combined.Title.map(Title_Dictionary)
 
 
-def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None, n_jobs=1,
-                        train_sizes=np.linspace(.05, 1., 20), verbose=0, plot=True):
-    train_sizes, train_scores, test_scores = learning_curve(
-        estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, verbose=verbose)
+def process_age(combined):
+    # a function that fills the missing values of the Age variable
+    def fillAges(row):
+        if row['Sex']=='female' and row['Pclass'] == 1:
+            if row['Title'] == 'Miss':
+                return 30
+            elif row['Title'] == 'Mrs':
+                return 45
+            elif row['Title'] == 'Officer':
+                return 49
+            elif row['Title'] == 'Royalty':
+                return 39
+        elif row['Sex']=='female' and row['Pclass'] == 2:
+            if row['Title'] == 'Miss':
+                return 20
+            elif row['Title'] == 'Mrs':
+                return 30
+        elif row['Sex']=='female' and row['Pclass'] == 3:
+            if row['Title'] == 'Miss':
+                return 18
+            elif row['Title'] == 'Mrs':
+                return 31
+        elif row['Sex']=='male' and row['Pclass'] == 1:
+            if row['Title'] == 'Master':
+                return 6
+            elif row['Title'] == 'Mr':
+                return 41.5
+            elif row['Title'] == 'Officer':
+                return 52
+            elif row['Title'] == 'Royalty':
+                return 40
+        elif row['Sex']=='male' and row['Pclass'] == 2:
+            if row['Title'] == 'Master':
+                return 2
+            elif row['Title'] == 'Mr':
+                return 30
+            elif row['Title'] == 'Officer':
+                return 41.5
+        elif row['Sex']=='male' and row['Pclass'] == 3:
+            if row['Title'] == 'Master':
+                return 6
+            elif row['Title'] == 'Mr':
+                return 26
 
-    train_scores_mean = np.mean(train_scores, axis=1)
-    train_scores_std = np.std(train_scores, axis=1)
-    test_scores_mean = np.mean(test_scores, axis=1)
-    test_scores_std = np.std(test_scores, axis=1)
-
-    if plot:
-        plt.figure()
-        plt.title(title)
-        if ylim is not None:
-            plt.ylim(*ylim)
-        plt.xlabel("Train set count")
-        plt.ylabel("Score")
-        plt.grid()
-
-        plt.fill_between(train_sizes,
-                         train_scores_mean - train_scores_std,
-                         train_scores_mean + train_scores_std,
-                         alpha=0.1, color="b")
-        plt.fill_between(train_sizes,
-                         test_scores_mean - test_scores_std,
-                         test_scores_mean + test_scores_std,
-                         alpha=0.1, color="r")
-        plt.plot(train_sizes, train_scores_mean, 'o-', color="b", label="Train score")
-        plt.plot(train_sizes, test_scores_mean, 'o-', color="r", label="Val score")
-
-        plt.legend(loc="best")
-
-        plt.draw()
-        plt.show()
-        plt.gca().invert_yaxis()
+    combined.Age = combined.apply(
+        lambda r : fillAges(r) if np.isnan(r['Age']) else r['Age'], axis=1)
 
 
-data_train = pd.read_csv("/usr/local/google/home/limeng/Downloads/kaggle/titanic/train.csv")
+def process_names(combined):
+    # we clean the Name variable
+    combined.drop('Name',axis=1,inplace=True)
 
-# Add missing data
+    # encoding in dummy variable
+    titles_dummies = pd.get_dummies(combined['Title'],prefix='Title')
+    combined = pd.concat([combined,titles_dummies],axis=1)
 
-# Predict missing data
-data_train, rfr = set_missing_ages(data_train)
-data_train = binarize_column(data_train, 'Cabin')
+    # removing the title variable
+    combined.drop('Title',axis=1,inplace=True)
 
-# One hot encoding columns
-dummies_Cabin = pd.get_dummies(data_train['Cabin'], prefix='Cabin')
-dummies_Embarked = pd.get_dummies(data_train['Embarked'], prefix='Embarked')
-dummies_Sex = pd.get_dummies(data_train['Sex'], prefix='Sex')
-dummies_Pclass = pd.get_dummies(data_train['Pclass'], prefix='Pclass')
-df = pd.concat([data_train, dummies_Cabin, dummies_Embarked, dummies_Sex, dummies_Pclass], axis=1)
-# Drop the one hot encoded columns
-df.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
+    return combined
 
-scaler = preprocessing.StandardScaler()
-age_scale_param = scaler.fit(df[['Age']])
-df['Age_scaled'] = scaler.fit_transform(df[['Age']], age_scale_param)
-fare_scale_param = scaler.fit(df[['Fare']])
-df['Fare_scaled'] = scaler.fit_transform(df[['Fare']], fare_scale_param)
 
-train_df = df.filter(
-    regex='Survived|Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
-train_np = train_df.as_matrix()
+def process_fares(combined):
+    # there's one missing fare value - replacing it with the mean.
+    combined.Fare.fillna(combined.Fare.mean(),inplace=True)
 
-y = train_np[:, 0]
-X = train_np[:, 1:]
 
-clf = linear_model.LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
-clf.fit(X, y)
+def process_embarked(combined):
+    # two missing embarked values - filling them with the most frequent one (S)
+    combined.Embarked.fillna('S',inplace=True)
 
-plot_learning_curve(clf, "Learning curve", X, y)
+    # dummy encoding
+    embarked_dummies = pd.get_dummies(combined['Embarked'],prefix='Embarked')
+    combined = pd.concat([combined,embarked_dummies],axis=1)
+    combined.drop('Embarked',axis=1,inplace=True)
 
-data_test = pd.read_csv("/usr/local/google/home/limeng/Downloads/kaggle/titanic/test.csv")
-data_test.loc[(data_test.Fare.isnull()), 'Fare'] = 0
-tmp_df = data_test[['Age', 'Fare', 'Parch', 'SibSp', 'Pclass']]
-null_age = tmp_df[data_test.Age.isnull()].as_matrix()
-X = null_age[:, 1:]
-predictedAges = rfr.predict(X)
-data_test.loc[(data_test.Age.isnull()), 'Age'] = predictedAges
+    return combined
 
-data_test = binarize_column(data_test, 'Cabin')
-dummies_Cabin = pd.get_dummies(data_test['Cabin'], prefix='Cabin')
-dummies_Embarked = pd.get_dummies(data_test['Embarked'], prefix='Embarked')
-dummies_Sex = pd.get_dummies(data_test['Sex'], prefix='Sex')
-dummies_Pclass = pd.get_dummies(data_test['Pclass'], prefix='Pclass')
 
-df_test = pd.concat([data_test,
-                     dummies_Cabin,
-                     dummies_Embarked,
-                     dummies_Sex,
-                     dummies_Pclass], axis=1)
-df_test.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
-df_test['Age_scaled'] = scaler.fit_transform(df_test[['Age']], age_scale_param)
-df_test['Fare_scaled'] = scaler.fit_transform(df_test[['Fare']], fare_scale_param)
+def process_cabin(combined):
+    # replacing missing cabins with U (for Uknown)
+    combined.Cabin.fillna('U',inplace=True)
 
-test = df_test.filter(regex='Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
-predictions = clf.predict(test)
-result = pd.DataFrame({'PassengerId':data_test['PassengerId'].as_matrix(),
-                       'Survived':predictions.astype(np.int32)})
-result.to_csv("logistic_regression_predictions.csv", index=False)
+    # mapping each Cabin value with the cabin letter
+    combined['Cabin'] = combined['Cabin'].map(lambda c : c[0])
 
-cof_data = pd.DataFrame({"columns":list(train_df.columns)[1:], "coef":list(clf.coef_.T)})
-print(cof_data)
+    # dummy encoding ...
+    cabin_dummies = pd.get_dummies(combined['Cabin'],prefix='Cabin')
+
+    combined = pd.concat([combined,cabin_dummies],axis=1)
+
+    combined.drop('Cabin',axis=1,inplace=True)
+
+    return combined
+
+
+def process_sex(combined):
+    # mapping string values to numerical one
+    combined['Sex'] = combined['Sex'].map({'male':1,'female':0})
+
+
+def process_pclass(combined):
+    # encoding into 3 categories:
+    pclass_dummies = pd.get_dummies(combined['Pclass'],prefix="Pclass")
+
+    # adding dummy variables
+    combined = pd.concat([combined,pclass_dummies],axis=1)
+
+    # removing "Pclass"
+
+    combined.drop('Pclass',axis=1,inplace=True)
+
+    return combined
+
+
+def process_ticket(combined):
+    # a function that extracts each prefix of the ticket,
+    # returns 'XXX' if no prefix (i.e the ticket is a digit)
+    def cleanTicket(ticket):
+        ticket = ticket.replace('.','')
+        ticket = ticket.replace('/','')
+        ticket = ticket.split()
+        ticket = map(lambda t : t.strip() , ticket)
+        ticket = filter(lambda t : not t.isdigit(), ticket)
+        if len(ticket) > 0:
+            return ticket[0]
+        else:
+            return 'XXX'
+
+    # Extracting dummy variables from tickets:
+    combined['Ticket'] = combined['Ticket'].map(cleanTicket)
+    tickets_dummies = pd.get_dummies(combined['Ticket'],prefix='Ticket')
+    combined = pd.concat([combined, tickets_dummies],axis=1)
+    combined.drop('Ticket',inplace=True,axis=1)
+    return combined
+
+
+def process_family(combined):
+    # introducing a new feature : the size of families (including the passenger)
+    combined['FamilySize'] = combined['Parch'] + combined['SibSp'] + 1
+
+    # introducing other features based on the family size
+    combined['Singleton'] = combined['FamilySize'].map(lambda s : 1 if s == 1 else 0)
+    combined['SmallFamily'] = combined['FamilySize'].map(lambda s : 1 if 2<=s<=4 else 0)
+    combined['LargeFamily'] = combined['FamilySize'].map(lambda s : 1 if 5<=s else 0)
+
+
+def scale_all_features(combined):
+    features = list(combined.columns)
+    features.remove('PassengerId')
+    combined[features] = combined[features].apply(lambda x: x/x.max(), axis=0)
+
+
+combined, targets = get_combined_data()
+create_titles(combined)
+process_age(combined)
+combined = process_names(combined)
+process_fares(combined)
+combined = process_embarked(combined)
+combined = process_cabin(combined)
+process_sex(combined)
+combined = process_pclass(combined)
+combined = process_ticket(combined)
+process_family(combined)
+scale_all_features(combined)
+
+
+def compute_score(clf, X, y,scoring='accuracy'):
+    xval = cross_val_score(clf, X, y, cv = 5,scoring=scoring)
+    return np.mean(xval)
+
+
+def recover_train_test_target(combined):
+    train_set = pd.read_csv('/usr/local/google/home/limeng/Downloads/kaggle/titanic/train.csv')
+
+    targets = train_set.Survived
+    train = combined.ix[0:890]
+    test = combined.ix[891:]
+
+    return train, test, targets
+
+
+train,test,targets = recover_train_test_target(combined)
+
+clf = ExtraTreesClassifier(n_estimators=200)
+clf = clf.fit(train, targets)
+
+features = pd.DataFrame()
+features['feature'] = train.columns
+features['importance'] = clf.feature_importances_
+print(features.sort_values(['importance'],ascending=False))
+
+model = SelectFromModel(clf, prefit=True)
+train_new = model.transform(train)
+print(train_new.shape)
+
+test_new = model.transform(test)
+print(test_new.shape)
+
+forest = RandomForestClassifier(max_features='sqrt')
+
+parameter_grid = {
+    'max_depth' : [4,5,6,7,8],
+    'n_estimators': [200,210,240,250],
+    'criterion': ['gini','entropy']
+}
+
+cross_validation = StratifiedKFold(targets, n_folds=5)
+
+grid_search = GridSearchCV(forest,
+                           param_grid=parameter_grid,
+                           cv=cross_validation)
+
+grid_search.fit(train_new, targets)
+
+print('Best score: {}'.format(grid_search.best_score_))
+print('Best parameters: {}'.format(grid_search.best_params_))
+
+output = grid_search.predict(test_new).astype(int)
+df_output = pd.DataFrame()
+df_output['PassengerId'] = test['PassengerId']
+df_output['Survived'] = output
+df_output[['PassengerId','Survived']].to_csv('logistic_regression_predictions.csv',index=False)
