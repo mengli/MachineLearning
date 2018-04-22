@@ -2,8 +2,6 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import GridSearchCV
-import matplotlib.pyplot as plt
 
 
 def prepLGB(data, classCol='', IDCol='', fDrop=[]):
@@ -43,14 +41,14 @@ if __name__ == '__main__':
         'click_id': 'uint32'
     }
 
-    train_data = pd.read_csv('C:\\Users\\jowet\\Downloads\\kaggle\\talkingdata\\train_sample.csv',
+    train_data = pd.read_csv('C:\\Users\\jowet\\Downloads\\kaggle\\talking_data\\train_sample.csv',
                              usecols=train_columns,
                              dtype=dtypes)
     train_data['click_datetime'] = pd.to_datetime(train_data['click_time'])
     train_data['dow'] = train_data['click_datetime'].dt.dayofweek
     train_data["doy"] = train_data["click_datetime"].dt.dayofyear
 
-    test_data = pd.read_csv('C:\\Users\\jowet\\Downloads\\kaggle\\talkingdata\\test_sample.csv', usecols=test_columns,
+    test_data = pd.read_csv('C:\\Users\\jowet\\Downloads\\kaggle\\talking_data\\test_sample.csv', usecols=test_columns,
                             dtype=dtypes)
     test_data['click_datetime'] = pd.to_datetime(test_data['click_time'])
     test_data['dow'] = test_data['click_datetime'].dt.dayofweek
@@ -59,10 +57,6 @@ if __name__ == '__main__':
     testDataL, _, click_id, testData = prepLGB(test_data,
                                                IDCol='click_id',
                                                fDrop=['click_id', 'click_time', 'click_datetime'])
-
-    allTrainDataL, allTrainLabels, _, allTrainData = prepLGB(train_data,
-                                                             classCol='is_attributed',
-                                                             fDrop=['click_time', 'click_datetime'])
 
     params = {'boosting_type': 'gbdt',
               'max_depth': -1,
@@ -84,19 +78,6 @@ if __name__ == '__main__':
               'num_class': 1,
               'metric': 'binary_error'}
 
-    gridParams = {
-        'learning_rate': [0.005],
-        'n_estimators': [8, 16, 24],
-        'num_leaves': [6, 8, 12, 16],
-        'boosting_type': ['gbdt'],
-        'objective': ['binary'],
-        'random_state': [501],  # Updated from 'seed'
-        'colsample_bytree': [0.64, 0.65, 0.66],
-        'subsample': [0.7, 0.75],
-        'reg_alpha': [1, 1.2],
-        'reg_lambda': [1, 1.2, 1.4],
-    }
-
     mdl = lgb.LGBMClassifier(boosting_type='gbdt',
                              objective='binary',
                              n_jobs=5,
@@ -111,64 +92,42 @@ if __name__ == '__main__':
                              min_child_samples=params['min_child_samples'],
                              scale_pos_weight=params['scale_pos_weight'])
 
-    mdl.get_params().keys()
+    print('Start training...')
+    # Kit k models with early-stopping on different training/validation splits
+    k = 12
+    predsValid = 0
+    predsTrain = 0
+    predsTest = 0
+    for i in range(0, k):
+        print('Fitting model %d' % i)
 
-    # Create the grid
-    grid = GridSearchCV(mdl, gridParams, verbose=-1, cv=4, n_jobs=-1)
-    # Run the grid
-    grid.fit(allTrainData, allTrainLabels)
+        trainData, validData = train_test_split(train_data, test_size=0.4, stratify=train_data['is_attributed'])
+        trainDataL, trainLabels, trainIDs, trainData = prepLGB(trainData,
+                                                               classCol='is_attributed',
+                                                               fDrop=['click_time', 'click_datetime'])
+        validDataL, validLabels, validIDs, validData = prepLGB(validData,
+                                                               classCol='is_attributed',
+                                                               fDrop=['click_time', 'click_datetime'])
+        # Train
+        gbm = lgb.train(params,
+                        trainDataL,
+                        100000,
+                        valid_sets=[trainDataL, validDataL],
+                        early_stopping_rounds=50,
+                        verbose_eval=4)
 
-    # Print the best parameters found
-    print(grid.best_params_)
-    print(grid.best_score_)
+        # Predict
+        print('Start predicting using model %d' % i)
+        predsValid += gbm.predict(validData, num_iteration=gbm.best_iteration) / k
+        predsTrain += gbm.predict(trainData, num_iteration=gbm.best_iteration) / k
+        predsTest += gbm.predict(testData, num_iteration=gbm.best_iteration) / k
 
-    # # Using parameters already set above, replace in the best from the grid search
-    # params['colsample_bytree'] = grid.best_params_['colsample_bytree']
-    # params['learning_rate'] = grid.best_params_['learning_rate']
-    # # params['max_bin'] = grid.best_params_['max_bin']
-    # params['num_leaves'] = grid.best_params_['num_leaves']
-    # params['reg_alpha'] = grid.best_params_['reg_alpha']
-    # params['reg_lambda'] = grid.best_params_['reg_lambda']
-    # params['subsample'] = grid.best_params_['subsample']
-    # # params['subsample_for_bin'] = grid.best_params_['subsample_for_bin']
-    #
-    # print('Fitting with params: ')
-    # print(params)
-    #
-    # # Kit k models with early-stopping on different training/validation splits
-    # k = 12;
-    # predsValid = 0
-    # predsTrain = 0
-    # predsTest = 0
-    # for i in range(0, k):
-    #     print('Fitting model', k)
-    #
-    #     trainData, validData = train_test_split(train_data, test_size=0.4, stratify=train_data['is_attributed'])
-    #     trainDataL, trainLabels, trainIDs, trainData = prepLGB(trainData,
-    #                                                            classCol='is_attributed',
-    #                                                            fDrop=['click_time', 'click_datetime'])
-    #     validDataL, validLabels, validIDs, validData = prepLGB(validData,
-    #                                                            classCol='is_attributed',
-    #                                                            fDrop=['click_time', 'click_datetime'])
-    #     # Train
-    #     gbm = lgb.train(params,
-    #                     trainDataL,
-    #                     100000,
-    #                     valid_sets=[trainDataL, validDataL],
-    #                     early_stopping_rounds=50,
-    #                     verbose_eval=4)
-    #
-    #     # Plot importance
-    #     lgb.plot_importance(gbm)
-    #     plt.show()
-    #
-    #     # Predict
-    #     predsValid += gbm.predict(validData, num_iteration=gbm.best_iteration) / k
-    #     predsTrain += gbm.predict(trainData, num_iteration=gbm.best_iteration) / k
-    #     predsTest += gbm.predict(testData, num_iteration=gbm.best_iteration) / k
-    #
-    # # Save submission
-    # sub = pd.DataFrame()
-    # sub['click_id'] = click_id
-    # sub['is_attributed'] = np.int32(predsTest > 0.5)
-    # sub.to_csv('talking_data.csv', index=False)
+        print('Save model %d' % i)
+        # save model k to file
+        gbm.save_model('model_%d.txt' % i)
+
+    # Save submission
+    sub = pd.DataFrame()
+    sub['click_id'] = click_id
+    sub['is_attributed'] = np.int32(predsTest > 0.5)
+    sub.to_csv('talking_data.csv', index=False)
