@@ -1,5 +1,6 @@
 from __future__ import print_function
 import pandas as pd
+import numpy as np
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
@@ -65,3 +66,8 @@ model.fit(x_train, y_train,
           epochs=epochs,
           verbose=1)
 result = model.predict(x_test, verbose=0)
+
+predict = np.argmax(result, axis=1)
+sub_df = pd.DataFrame({"ImageId": range(1, len(predict) + 1)})
+sub_df["Label"] = predict
+sub_df.to_csv("predict.csv", index=False)
